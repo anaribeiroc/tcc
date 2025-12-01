@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Abraço Solidário</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="estillo.css">
 </head>
 <body>
@@ -378,8 +379,8 @@
                     <textarea id="motivacao" placeholder="Compartilhe o que te motiva a doar..."></textarea>
                 </div>
 
-                <button type="button" id="gerarQR" class="submit-donation-btn">
-                    <i class="fas fa-qrcode"></i> Gerar QR Code
+                <button type="button" id="botaoDoacao" class="submit-donation-btn">
+                    <i class="fas fa-heart"></i> Selecione o tipo de doação
                 </button>
             </form>
 
@@ -390,7 +391,7 @@
                 <p>Escaneie o código abaixo para fazer sua doação</p>
             </div>
             <div class="qr-image-container">
-                <img src="qrcode.png" alt="QR Code Pix" class="qr-image">
+
             </div>
             <div class="qr-instructions">
                 <p><strong>Como doar:</strong></p>

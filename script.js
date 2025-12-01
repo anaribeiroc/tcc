@@ -1169,4 +1169,1062 @@ document.addEventListener("DOMContentLoaded", function() {
             attributeFilter: ['style']
         });
     }
+
 });
+
+// ===== SISTEMA DE QR CODE - ISOLADO E FUNCIONAL =====
+
+// EVITAR CONFLITOS - Executar APENAS quando necessário
+(function() {
+    'use strict'; // Modo estrito para evitar erros
+    
+    console.log('🔒 Inicializando sistema QR Code isolado...');
+    
+    // AGUARDAR TUDO CARREGAR
+    window.addEventListener('load', function() {
+        console.log('✅ Página totalmente carregada, iniciando QR Code...');
+        
+        // Esperar mais 2 segundos para evitar conflitos
+        setTimeout(iniciarSistemaQRCodeIsolado, 2000);
+    });
+    
+    function iniciarSistemaQRCodeIsolado() {
+        console.log('🎯 Sistema QR Code isolado iniciando...');
+        
+        // ENCONTRAR BOTÃO DE FORMA AGGRESSIVA
+        let botaoQR = encontrarBotaoQRCode();
+        
+        if (!botaoQR) {
+            console.error('❌ Botão QR Code não encontrado!');
+            criarBotaoManual();
+            return;
+        }
+        
+        console.log('✅ Botão encontrado:', botaoQR);
+        
+        // CONFIGURAR BOTÃO COM EVENTO DIRETO
+        configurarBotaoQRCode(botaoQR);
+        
+        // BOTÃO FECHAR
+        const btnFechar = document.getElementById('closeQR');
+        if (btnFechar) {
+            btnFechar.addEventListener('click', function() {
+                const qrSection = document.getElementById('qrContainer');
+                if (qrSection) {
+                    qrSection.classList.add('qr-hidden');
+                    qrSection.classList.remove('qr-visible');
+                }
+            });
+        }
+        
+        console.log('🎉 Sistema QR Code configurado com sucesso!');
+    }
+    
+    function encontrarBotaoQRCode() {
+        // Método 1: Pelo ID correto
+        let botao = document.getElementById('gerarQR');
+        if (botao) return botao;
+        
+        // Método 2: Pelo ID errado (com O)
+        botao = document.getElementById('geraroQR');
+        if (botao) {
+            console.log('⚠️ Botão com ID errado "geraroQR", corrigindo...');
+            botao.id = 'gerarQR'; // Corrigir o ID
+            return botao;
+        }
+        
+        // Método 3: Por classe
+        botao = document.querySelector('.submit-donation-btn');
+        if (botao && (botao.textContent.includes('QR') || botao.innerHTML.includes('QR'))) {
+            return botao;
+        }
+        
+        // Método 4: Por texto
+        const botoes = document.getElementsByTagName('button');
+        for (let i = 0; i < botoes.length; i++) {
+            const btn = botoes[i];
+            if (btn.textContent.includes('Gerar QR') || btn.textContent.includes('QR Code')) {
+                return btn;
+            }
+        }
+        
+        return null;
+    }
+    
+    function configurarBotaoQRCode(botao) {
+        console.log('⚙️ Configurando botão QR Code...');
+        
+        // 1. GARANTIR que é type="button"
+        botao.type = 'button';
+        
+        // 2. REMOVER QUALQUER EVENTO EXISTENTE
+        const novoBotao = botao.cloneNode(true);
+        botao.parentNode.replaceChild(novoBotao, botao);
+        botao = novoBotao;
+        
+        // 3. ADICIONAR NOSSO EVENTO (com capture phase)
+        botao.addEventListener('click', handleClickQRCode, true);
+        
+        // 4. TAMBÉM adicionar onclick direto
+        botao.onclick = handleClickQRCode;
+        
+        console.log('✅ Botão configurado com múltiplos eventos!');
+    }
+    
+    function handleClickQRCode(event) {
+        // PARAR TUDO
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+        }
+        
+        console.log('🎯 EVENTO QR CODE CAPTURADO!');
+        
+        // VALIDAR
+        if (!validarFormularioDoacao()) {
+            return false;
+        }
+        
+        // GERAR QR CODE
+        gerarQRCodeDoacao();
+        
+        // IMPEDIR QUALQUER OUTRO COMPORTAMENTO
+        return false;
+    }
+    
+    function validarFormularioDoacao() {
+        console.log('📋 Validando formulário...');
+        
+        const elementos = {
+            data: document.getElementById('dataNascimento'),
+            instituicao: document.getElementById('instituicao'),
+            tipo: document.getElementById('tipoDoacao')
+        };
+        
+        // Verificar existência
+        for (let [nome, elem] of Object.entries(elementos)) {
+            if (!elem) {
+                console.error(`Elemento ${nome} não encontrado`);
+                alert('Erro no formulário. Campos não encontrados.');
+                return false;
+            }
+        }
+        
+        // Verificar preenchimento
+        if (!elementos.data.value || !elementos.instituicao.value || !elementos.tipo.value) {
+            alert('❌ Por favor, preencha todos os campos obrigatórios (*)');
+            return false;
+        }
+        
+        // Validar idade
+        const dataNasc = new Date(elementos.data.value);
+        const hoje = new Date();
+        let idade = hoje.getFullYear() - dataNasc.getFullYear();
+        
+        if (hoje.getMonth() < dataNasc.getMonth() || 
+            (hoje.getMonth() === dataNasc.getMonth() && hoje.getDate() < dataNasc.getDate())) {
+            idade--;
+        }
+        
+        if (idade < 18) {
+            alert('❌ Para doar é necessário ter 18 anos ou mais.');
+            return false;
+        }
+        
+        return true;
+    }
+    
+  // ===== SISTEMA INTEGRADO DE DOAÇÃO =====
+
+// Mapeamento dos tipos de doação
+const tiposDoacao = {
+    'dinheiro': {
+        texto: 'Gerar QR Code PIX',
+        icone: 'fa-qrcode',
+        cor: '#008080',
+        acao: 'gerarQRCodeDoacao' // ⬅️ Agora chama a função existente
+    },
+    'alimentos': {
+        texto: 'Doar Alimentos',
+        icone: 'fa-apple-alt',
+        cor: '#28a745',
+        acao: 'processarDoacaoItem'
+    },
+    'roupas': {
+        texto: 'Doar Roupas',
+        icone: 'fa-tshirt',
+        cor: '#17a2b8',
+        acao: 'processarDoacaoItem'
+    },
+    'brinquedos': {
+        texto: 'Doar Brinquedos',
+        icone: 'fa-gamepad',
+        cor: '#ffc107',
+        acao: 'processarDoacaoItem'
+    }
+};
+
+// Sistema principal
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        console.log('🚀 Inicializando sistema integrado de doação...');
+        inicializarSistemaIntegrado();
+    }, 1500);
+});
+
+function inicializarSistemaIntegrado() {
+    const tipoSelect = document.getElementById('tipoDoacao');
+    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!tipoSelect || !botao) {
+        console.error('Elementos não encontrados');
+        return;
+    }
+    
+    // Configurar eventos
+    tipoSelect.addEventListener('change', function() {
+        atualizarBotaoDoacao(this.value);
+    });
+    
+    botao.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const tipoSelecionado = tipoSelect.value;
+        
+        if (!tipoSelecionado) {
+            alert('❌ Selecione um tipo de doação primeiro.');
+            return;
+        }
+        
+        if (!validarFormularioDoacao()) {
+            return;
+        }
+        
+        // Chamar função baseada no tipo
+        if (tipoSelecionado === 'dinheiro') {
+            gerarQRCodeDoacao(); // ⬅️ Chama a função EXISTENTE
+        } else {
+            processarDoacaoItem(tipoSelecionado);
+        }
+    });
+    
+    // Estado inicial
+    atualizarBotaoDoacao('');
+}
+
+function atualizarBotaoDoacao(tipo) {
+    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!botao) return;
+    
+    if (!tipo) {
+        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+        botao.style.background = '#6c757d';
+        botao.disabled = true;
+        return;
+    }
+    
+    const config = tiposDoacao[tipo];
+    
+    if (!config) return;
+    
+    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
+    botao.style.background = config.cor;
+    botao.disabled = false;
+}
+
+function processarDoacaoItem(tipo) {
+    const instituicaoSelect = document.getElementById('instituicao');
+    const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+    
+        const mensagem = `Obrigado pela sua doação, ${nome}! Sua contribuição fará a diferença.`;
+        
+        alert(mensagem);
+        
+        // Fechar modal após sucesso
+        setTimeout(() => {
+            const modal = document.getElementById('donationModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+            
+            // Resetar
+            const form = document.getElementById('formDoacao');
+            if (form) {
+                form.reset();
+                atualizarBotaoDoacao('');
+            }
+        }, 3000);
+}
+
+
+    function gerarQRCodeDoacao() {
+        console.log('🎨 Gerando QR Code de doação...');
+        
+        if (typeof QRCode === 'undefined') {
+            alert('❌ Biblioteca QRCode não carregada!');
+            return;
+        }
+        
+        try {
+            // Obter dados
+            const instituicaoSelect = document.getElementById('instituicao');
+            const tipoSelect = document.getElementById('tipoDoacao');
+            
+            // VERIFICAR se é doação em dinheiro
+            if (!tipoSelect || tipoSelect.value !== 'dinheiro') {
+                alert('⚠️ Esta função só está disponível para doações em dinheiro.');
+                return;
+            }
+            
+            const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+            
+            // Container do QR Code
+            let container = document.querySelector('.qr-image-container');
+            
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'qr-image-container';
+                container.style.cssText = 'margin: 20px auto; text-align: center;';
+                
+                const qrContainer = document.getElementById('qrContainer');
+                if (qrContainer) {
+                    const header = qrContainer.querySelector('.qr-header');
+                    if (header) header.after(container);
+                }
+            }
+            
+            // Limpar e gerar QR Code com texto CURTO
+            container.innerHTML = '';
+            
+            // Texto SUPER CURTO para evitar erro "overflow"
+            const textoQR = `DOA:${nomeInstituicao.substring(0, 3).toUpperCase()}:10.00`;
+            
+            new QRCode(container, {
+                text: textoQR,
+                width: 250,
+                height: 250,
+                colorDark: "#008080",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            
+
+            // Mensagem de sucesso
+            setTimeout(() => {
+                alert(`✅ QR Code gerado com sucesso!`);
+            }, 300);
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            alert('Erro: ' + error.message);
+        }
+    }
+    
+    // Função para criar texto SIMPLIFICADO para QR Code
+    function criarTextoQRSimplificado(nomeInstituicao) {
+        // Para PIX, precisamos de um formato específico
+        // Vamos usar um texto BEM CURTO
+        
+        // Opção 1: Apenas dados essenciais
+        const textoCurto = `PIX:ABRACOSOLIDARIO\nINST:${nomeInstituicao.substring(0, 20)}\nVAL:10.00`;
+        
+        // Opção 2: Apenas um link ou código simples
+        // const textoCurto = `DOACAO:${nomeInstituicao.substring(0, 15)}:10.00`;
+        
+        // Opção 3: Código mínimo
+        // const textoCurto = `D:${nomeInstituicao.charAt(0)}:10`;
+        
+        console.log('Texto simplificado criado:', textoCurto);
+        return textoCurto;
+    }
+    
+    // Função de EMERGÊNCIA para QR Code ULTRA SIMPLES
+    function gerarQRCodeUltraSimples() {
+        console.log('🚨 Gerando QR Code ULTRA SIMPLES...');
+        
+        const container = document.querySelector('.qr-image-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        // Texto MINIMALISTA
+        const textoMinimo = "DOACAO:10.00"; // Apenas 12 caracteres!
+        
+        try {
+            new QRCode(container, {
+                text: textoMinimo,
+                width: 250,
+                height: 250,
+                colorDark: "#008080",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.L // ⬅️ Nível mais baixo (mais caracteres permitidos)
+            });
+            
+            console.log('✅ QR Code ultra simples gerado!');
+            alert('✅ QR Code gerado (versão simplificada)!');
+            
+        } catch (error) {
+            console.error('❌ ERRO CRÍTICO:', error);
+            alert('❌ Não foi possível gerar QR Code. O texto é muito longo.');
+        }
+    }
+    
+    function criarContainerQRCode() {
+        const container = document.createElement('div');
+        container.className = 'qr-image-container';
+        container.style.cssText = `
+            width: 250px;
+            height: 250px;
+            margin: 20px auto;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        `;
+        
+        // Inserir no local correto
+        const qrContainer = document.getElementById('qrContainer');
+        if (qrContainer) {
+            const qrHeader = qrContainer.querySelector('.qr-header');
+            if (qrHeader) {
+                qrHeader.after(container);
+            } else {
+                qrContainer.prepend(container);
+            }
+        }
+        
+        return container;
+    }
+    
+    function mostrarSecaoQRCode(instituicao) {
+        const qrContainer = document.getElementById('qrContainer');
+        
+        if (!qrContainer) {
+            console.error('Seção QR não encontrada!');
+            return;
+        }
+        
+        // Mostrar
+        qrContainer.classList.remove('qr-hidden');
+        qrContainer.classList.add('qr-visible');
+        
+        // Atualizar título
+        const titulo = qrContainer.querySelector('h3');
+        if (titulo) {
+            titulo.textContent = `QR Code PIX - ${instituicao}`;
+        }
+        
+        // Scroll
+        setTimeout(() => {
+            qrContainer.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }, 100);
+    }
+    
+    function criarBotaoManual() {
+        console.log('⚠️ Criando botão manual de emergência...');
+        
+        // Criar botão flutuante
+        const botaoEmergencia = document.createElement('button');
+        botaoEmergencia.textContent = '🎯 GERAR QR CODE (EMERGÊNCIA)';
+        botaoEmergencia.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: #008080;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,128,128,0.4);
+        `;
+        
+        botaoEmergencia.onclick = function() {
+            alert('Botão de emergência funcionando!');
+            gerarQRCodeDoacao();
+        };
+        
+        document.body.appendChild(botaoEmergencia);
+        
+        console.log('✅ Botão de emergência criado!');
+    }
+    
+})();
+
+// ===== SISTEMA DE BOTÃO DINÂMICO =====
+
+// Mapeamento dos tipos de doação para textos e ícones
+const tiposDoacao = {
+    'dinheiro': {
+        texto: 'Gerar QR Code PIX',
+        icone: 'fa-qrcode',
+        cor: '#008080',
+        acao: 'gerarQRCode'
+    },
+    'alimentos': {
+        texto: 'Doar Alimentos',
+        icone: 'fa-apple-alt',
+        cor: '#28a745',
+        acao: 'processarDoacaoItem'
+    },
+    'roupas': {
+        texto: 'Doar Roupas',
+        icone: 'fa-tshirt',
+        cor: '#17a2b8',
+        acao: 'processarDoacaoItem'
+    },
+    'brinquedos': {
+        texto: 'Doar Brinquedos',
+        icone: 'fa-gamepad',
+        cor: '#ffc107',
+        acao: 'processarDoacaoItem'
+    }
+};
+
+// Inicializar quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(inicializarSistemaDoacao, 1000);
+});
+
+function inicializarSistemaDoacao() {
+    console.log('⚙️ Inicializando sistema de doação dinâmica...');
+    
+    const tipoSelect = document.getElementById('tipoDoacao');
+    const botaoDoacao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!tipoSelect || !botaoDoacao) {
+        console.error('Elementos não encontrados!');
+        return;
+    }
+    
+    // 1. Configurar evento no select
+    tipoSelect.addEventListener('change', function() {
+        atualizarBotaoDoacao(this.value);
+        verificarExibicaoQRCode(this.value);
+    });
+    
+    // 2. Configurar clique no botão
+    botaoDoacao.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const tipoSelecionado = tipoSelect.value;
+        
+        if (!tipoSelecionado) {
+            alert('❌ Por favor, selecione um tipo de doação primeiro.');
+            return;
+        }
+        
+        // Validar formulário primeiro
+        if (!validarFormularioDoacao()) {
+            return;
+        }
+        
+        // Executar ação baseada no tipo
+        executarAcaoDoacao(tipoSelecionado);
+    });
+    
+    // 3. Estado inicial
+    atualizarBotaoDoacao('');
+    
+    console.log('✅ Sistema de doação dinâmica configurado!');
+}
+
+// Função para atualizar o botão conforme o tipo selecionado
+function atualizarBotaoDoacao(tipo) {
+    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!botao) return;
+    
+    if (!tipo) {
+        // Nenhum tipo selecionado
+        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+        botao.style.background = '#6c757d';
+        botao.disabled = true;
+        botao.style.opacity = '0.7';
+        botao.style.cursor = 'not-allowed';
+        return;
+    }
+    
+    const config = tiposDoacao[tipo];
+    
+    if (!config) {
+        console.error('Tipo não reconhecido:', tipo);
+        return;
+    }
+    
+    // Atualizar botão
+    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
+    botao.style.background = config.cor;
+    botao.disabled = false;
+    botao.style.opacity = '1';
+    botao.style.cursor = 'pointer';
+    
+    // Adicionar efeito de transição
+    botao.style.transition = 'all 0.3s ease';
+    
+    console.log(`✅ Botão atualizado para: ${config.texto}`);
+}
+
+// Função para verificar se deve mostrar QR Code
+function verificarExibicaoQRCode(tipo) {
+    const qrSection = document.getElementById('qrContainer');
+    
+    if (!qrSection) return;
+    
+    if (tipo === 'dinheiro') {
+        // Para dinheiro, apenas esconder se estiver visível
+        // O QR Code será gerado ao clicar no botão
+        console.log('💰 Doação em dinheiro selecionada');
+    } else {
+        // Para outros tipos, garantir que QR Code esteja escondido
+        qrSection.classList.add('qr-hidden');
+        qrSection.classList.remove('qr-visible');
+        console.log(`📦 Doação de ${tipo} selecionada - QR Code escondido`);
+    }
+}
+
+// Função para executar a ação baseada no tipo
+function executarAcaoDoacao(tipo) {
+    const config = tiposDoacao[tipo];
+    
+    if (!config) {
+        alert('Tipo de doação não reconhecido.');
+        return;
+    }
+    
+    console.log(`🎯 Executando ação: ${config.acao} para ${tipo}`);
+    
+    switch(config.acao) {
+        case 'gerarQRCode':
+            gerarQRCodeDoacao();
+            break;
+            
+        case 'processarDoacaoItem':
+            processarDoacaoItem(tipo);
+            break;
+            
+        default:
+            alert('Ação não configurada para este tipo de doação.');
+    }
+}
+
+// Função para processar doação de itens
+function processarDoacaoItem(tipoItem) {
+    const instituicaoSelect = document.getElementById('instituicao');
+    const motivacaoTextarea = document.getElementById('motivacao');
+    
+    if (!instituicaoSelect) {
+        alert('Erro: Instituição não selecionada.');
+        return;
+    }
+    
+    const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+    const motivacao = motivacaoTextarea ? motivacaoTextarea.value : '';
+    
+    // Mapear tipo para texto amigável
+    const tiposTexto = {
+        'alimentos': 'alimentos',
+        'roupas': 'roupas',
+        'brinquedos': 'brinquedos'
+    };
+    
+    const tipoTexto = tiposTexto[tipoItem] || 'itens';
+    
+    
+    // Registrar a doação no localStorage (opcional)
+    registrarDoacaoItem(tipoItem, nomeInstituicao, motivacao);
+    
+    // Fechar o modal após alguns segundos
+    setTimeout(() => {
+        const modal = document.getElementById('donationModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Resetar formulário
+        const form = document.getElementById('formDoacao');
+        if (form) {
+            form.reset();
+            atualizarBotaoDoacao('');
+        }
+    }, 5000);
+}
+
+// Função para registrar doação de item
+function registrarDoacaoItem(tipo, instituicao, motivacao) {
+    try {
+        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
+        
+        const doacao = {
+            tipo: 'item',
+            item: tipo,
+            instituicao: instituicao,
+            usuario: usuarioLogado ? usuarioLogado.nome : 'Visitante',
+            motivacao: motivacao,
+            data: new Date().toLocaleString('pt-BR'),
+            status: 'pendente'
+        };
+        
+        console.log('📝 Doação de item registrada:', doacao);
+        
+        // Salvar no localStorage
+        const doacoes = JSON.parse(localStorage.getItem('doacoes')) || [];
+        doacoes.push(doacao);
+        localStorage.setItem('doacoes', JSON.stringify(doacoes));
+        
+    } catch (error) {
+        console.error('Erro ao registrar doação:', error);
+    }
+}
+
+// Atualizar a função de validar formulário
+function validarFormularioDoacao() {
+    console.log('📋 Validando formulário...');
+    
+    const dataInput = document.getElementById('dataNascimento');
+    const instituicaoSelect = document.getElementById('instituicao');
+    const tipoSelect = document.getElementById('tipoDoacao');
+    
+    // Verificar existência
+    if (!dataInput || !instituicaoSelect || !tipoSelect) {
+        alert('Erro no formulário. Recarregue a página.');
+        return false;
+    }
+    
+    // Verificar preenchimento
+    if (!dataInput.value || !instituicaoSelect.value || !tipoSelect.value) {
+        alert('❌ Por favor, preencha todos os campos obrigatórios (*)');
+        return false;
+    }
+    
+    // Validar idade (18+)
+    const dataNasc = new Date(dataInput.value);
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - dataNasc.getFullYear();
+    
+    if (hoje.getMonth() < dataNasc.getMonth() || 
+        (hoje.getMonth() === dataNasc.getMonth() && hoje.getDate() < dataNasc.getDate())) {
+        idade--;
+    }
+    
+    if (idade < 18) {
+        alert('❌ Para doar é necessário ter 18 anos ou mais.');
+        return false;
+    }
+    
+    return true;
+}
+// Função para adicionar classe de cor ao botão
+function adicionarClasseCorBotao(tipo) {
+    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!botao) return;
+    
+    // Remover todas as classes de cor
+    botao.classList.remove('botao-dinheiro', 'botao-alimentos', 'botao-roupas', 'botao-brinquedos');
+    
+    // Adicionar classe específica
+    switch(tipo) {
+        case 'dinheiro':
+            botao.classList.add('botao-dinheiro');
+            break;
+        case 'alimentos':
+            botao.classList.add('botao-alimentos');
+            break;
+        case 'roupas':
+            botao.classList.add('botao-roupas');
+            break;
+        case 'brinquedos':
+            botao.classList.add('botao-brinquedos');
+            break;
+    }
+}
+
+// Atualize a função atualizarBotaoDoacao para incluir isso:
+function atualizarBotaoDoacao(tipo) {
+    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
+    
+    if (!botao) return;
+    
+    if (!tipo) {
+        // Estado neutro
+        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+        botao.style.background = '#6c757d';
+        botao.disabled = true;
+        botao.classList.remove('botao-dinheiro', 'botao-alimentos', 'botao-roupas', 'botao-brinquedos');
+        return;
+    }
+    
+    const config = tiposDoacao[tipo];
+    
+    if (!config) return;
+    
+    // Atualizar conteúdo
+    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
+    botao.disabled = false;
+    
+    // Adicionar classe de cor
+    adicionarClasseCorBotao(tipo);
+    
+    console.log(`✅ Botão atualizado para: ${config.texto}`);
+}
+
+// Adicione esta função para diagnóstico
+function verificarConexoesQR() {
+    console.log('🔍 Verificando conexões do sistema QR...');
+    
+    const elementos = {
+        tipoSelect: document.getElementById('tipoDoacao'),
+        botao: document.getElementById('botaoDoacao') || document.getElementById('gerarQR'),
+        qrContainer: document.getElementById('qrContainer'),
+        imageContainer: document.querySelector('.qr-image-container'),
+        instituicaoSelect: document.getElementById('instituicao')
+    };
+    
+    Object.entries(elementos).forEach(([nome, elem]) => {
+        console.log(`${nome}:`, elem ? '✅ ENCONTRADO' : '❌ NÃO ENCONTRADO');
+    });
+    
+    // Testar se a função gerarQRCodeDoacao é chamada
+    console.log('gerarQRCodeDoacao é função?', typeof gerarQRCodeDoacao === 'function');
+    
+    // Testar clique manual
+    if (elementos.botao) {
+        console.log('ID do botão:', elementos.botao.id);
+        console.log('HTML do botão:', elementos.botao.outerHTML.substring(0, 100) + '...');
+    }
+}
+
+// Execute no Console para diagnóstico
+verificarConexoesQR();
+
+// ===== SISTEMA DE QR CODE - VERSÃO FINAL FUNCIONAL =====
+
+// Garantir que as funções existam
+if (typeof gerarQRCodeDoacao === 'undefined') {
+    window.gerarQRCodeDoacao = function() {
+        console.log('🎨 GERANDO QR CODE (função de emergência)...');
+        
+        if (typeof QRCode === 'undefined') {
+            alert('❌ Biblioteca QRCode não carregada!');
+            return;
+        }
+        
+        try {
+            // Obter dados
+            const instituicaoSelect = document.getElementById('instituicao');
+            const tipoSelect = document.getElementById('tipoDoacao');
+            
+            if (!instituicaoSelect || !tipoSelect) {
+                alert('Erro: Elementos não encontrados.');
+                return;
+            }
+            
+            const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+            
+            // Container do QR Code
+            let container = document.querySelector('.qr-image-container');
+            
+            if (!container) {
+                console.log('📦 Criando container...');
+                container = document.createElement('div');
+                container.className = 'qr-image-container';
+                container.style.cssText = `
+                    width: 250px;
+                    height: 250px;
+                    margin: 20px auto;
+                    background: white;
+                    border-radius: 10px;
+                    padding: 10px;
+                `;
+                
+                const qrContainer = document.getElementById('qrContainer');
+                if (qrContainer) {
+                    const header = qrContainer.querySelector('.qr-header');
+                    if (header) {
+                        header.after(container);
+                    }
+                }
+            }
+            
+            // Limpar e gerar
+            container.innerHTML = '';
+            
+            // Texto CURTO
+            const textoQR = `DOA:${nomeInstituicao.substring(0, 3).toUpperCase()}:10.00`;
+            
+            new QRCode(container, {
+                text: textoQR,
+                width: 250,
+                height: 250,
+                colorDark: "#008080",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            
+            console.log('✅ QR Code gerado!');
+            
+            // CHAMAR FUNÇÃO PARA MOSTRAR
+            if (typeof mostrarSecaoQRCode === 'function') {
+                mostrarSecaoQRCode(nomeInstituicao);
+            } else {
+                // Se a função não existir, mostrar manualmente
+                mostrarQRCodeManual(nomeInstituicao);
+            }
+            
+            setTimeout(() => {
+                alert(`✅ QR Code gerado!\n\nInstituição: ${nomeInstituicao}`);
+            }, 300);
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            alert('Erro: ' + error.message);
+        }
+    };
+    
+    console.log('✅ Função gerarQRCodeDoacao criada (emergência)');
+}
+
+// Função para mostrar QR Code (se a original não existir)
+if (typeof mostrarSecaoQRCode === 'undefined') {
+    window.mostrarSecaoQRCode = function(instituicao) {
+        console.log('👁️ MOSTRANDO QR Code (função de emergência)...');
+        mostrarQRCodeManual(instituicao);
+    };
+}
+
+// Função manual para mostrar QR Code
+function mostrarQRCodeManual(instituicao) {
+    const qrContainer = document.getElementById('qrContainer');
+    
+    if (!qrContainer) {
+        console.error('❌ Container QR não encontrado!');
+        return;
+    }
+    
+    console.log('🎯 Mostrando QR Code manualmente...');
+    
+    // REMOVER hidden
+    qrContainer.classList.remove('qr-hidden');
+    
+    // ADICIONAR visible
+    qrContainer.classList.add('qr-visible');
+    
+    // FORÇAR estilos
+    qrContainer.style.cssText = `
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        background: white !important;
+        padding: 20px !important;
+        border-radius: 10px !important;
+        margin: 20px 0 !important;
+        border: 2px solid #008080 !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    `;
+    
+    // Atualizar título
+    const titulo = qrContainer.querySelector('h3');
+    if (titulo) {
+        titulo.textContent = `QR Code PIX - ${instituicao}`;
+        titulo.style.color = '#008080';
+    }
+    
+    // Scroll
+    setTimeout(() => {
+        qrContainer.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+    }, 100);
+    
+    console.log('✅ QR Code mostrado!');
+}
+
+// Sistema do botão dinâmico (SE ainda não existir)
+if (!window.sistemaDoacaoInicializado) {
+    setTimeout(() => {
+        console.log('⚙️ Configurando botão dinâmico...');
+        
+        const tipoSelect = document.getElementById('tipoDoacao');
+        const botao = document.getElementById('botaoDoacao');
+        
+        if (tipoSelect && botao) {
+            // Evento de change no select
+            tipoSelect.addEventListener('change', function() {
+                const tipo = this.value;
+                
+                if (tipo === 'dinheiro') {
+                    botao.innerHTML = '<i class="fas fa-qrcode"></i> Gerar QR Code PIX';
+                    botao.style.background = '#008080';
+                } else if (tipo === 'alimentos') {
+                    botao.innerHTML = '<i class="fas fa-apple-alt"></i> Doar Alimentos';
+                    botao.style.background = '#28a745';
+                } else if (tipo === 'roupas') {
+                    botao.innerHTML = '<i class="fas fa-tshirt"></i> Doar Roupas';
+                    botao.style.background = '#17a2b8';
+                } else if (tipo === 'brinquedos') {
+                    botao.innerHTML = '<i class="fas fa-gamepad"></i> Doar Brinquedos';
+                    botao.style.background = '#ffc107';
+                } else {
+                    botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo';
+                    botao.style.background = '#6c757d';
+                }
+                
+                botao.disabled = !tipo;
+            });
+            
+            // Evento de clique no botão
+            botao.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const tipo = tipoSelect.value;
+                
+                if (!tipo) {
+                    alert('Selecione um tipo de doação.');
+                    return;
+                }
+                
+                // Validar campos obrigatórios
+                const data = document.getElementById('dataNascimento').value;
+                const instituicao = document.getElementById('instituicao').value;
+                
+                if (!data || !instituicao) {
+                    alert('Preencha todos os campos obrigatórios.');
+                    return;
+                }
+                
+                // Ação baseada no tipo
+                if (tipo === 'dinheiro') {
+                    // Chamar função de gerar QR Code
+                    if (typeof gerarQRCodeDoacao === 'function') {
+                        gerarQRCodeDoacao();
+                    } else {
+                        alert('Erro: Função não disponível.');
+                    }
+                } else {
+                    const tiposTexto = {
+                        'alimentos': 'alimentos',
+                        'roupas': 'roupas', 
+                        'brinquedos': 'brinquedos'
+                    };
+                    
+                    alert(`✅ Doação de ${tiposTexto[tipo]} registrada!`);
+                }
+            });
+            
+            console.log('✅ Botão dinâmico configurado!');
+            window.sistemaDoacaoInicializado = true;
+        }
+    }, 1000);
+}

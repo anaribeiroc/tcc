@@ -2158,3 +2158,61 @@ body {
         box-shadow: 0 12px 35px rgba(0, 128, 128, 0.5);
     }
 }
+/* Estilos para o botão dinâmico */
+.submit-donation-btn {
+    transition: all 0.3s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    padding: 16px 40px !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    border-radius: 50px !important;
+    border: none !important;
+    cursor: pointer !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
+    min-width: 250px !important;
+}
+
+.submit-donation-btn:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3) !important;
+}
+
+.submit-donation-btn:active {
+    transform: translateY(-1px) !important;
+}
+
+.submit-donation-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+.submit-donation-btn:disabled:hover {
+    transform: none !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Cores específicas para cada tipo */
+.botao-dinheiro {
+    background: linear-gradient(135deg, #008080, #006666) !important;
+}
+
+.botao-alimentos {
+    background: linear-gradient(135deg, #28a745, #1e7e34) !important;
+}
+
+.botao-roupas {
+    background: linear-gradient(135deg, #17a2b8, #117a8b) !important;
+}
+
+.botao-brinquedos {
+    background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+    color: #212529 !important;
+}
+
+.botao-brinquedos:hover {
+    color: #212529 !important;
+}
