@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
     const mobileLoginBtn = document.getElementById('mobileLoginBtn');
 
+
     // Verificar se há usuário logado ao carregar a página
     checkUserLoginStatus();
 
@@ -1362,7 +1363,8 @@ const tiposDoacao = {
         icone: 'fa-gamepad',
         cor: '#ffc107',
         acao: 'processarDoacaoItem'
-    }
+    },
+    
 };
 
 // Sistema principal
@@ -1730,6 +1732,9 @@ function inicializarSistemaDoacao() {
         
         // Executar ação baseada no tipo
         executarAcaoDoacao(tipoSelecionado);
+
+        
+        
     });
     
     // 3. Estado inicial
