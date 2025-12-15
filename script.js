@@ -1,25 +1,69 @@
-// ===== SISTEMA DE LOGIN E USUÁRIOS =====
-document.addEventListener('DOMContentLoaded', function() {
+// ===== CONFIGURAÇÕES GLOBAIS =====
+const API_URL = 'http://localhost/abraco-solidario/backend/api';
+let currentUser = null;
+let processandoDoacao = false; // Variável global para evitar duplo clique
+
+// ===== SISTEMA DE LOGIN E USUÁRIOS COM BACKEND =====
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('Iniciando sistema Abraço Solidário...');
+
     // Elementos do DOM para o sistema de usuário
     const userMenu = document.getElementById('userMenu');
     const userName = document.getElementById('userName');
     const logoutBtn = document.getElementById('logoutBtn');
     const loginBtn = document.getElementById('loginBtn');
-    
     const mobileUserMenu = document.getElementById('mobileUserMenu');
     const mobileUserName = document.getElementById('mobileUserName');
     const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
     const mobileLoginBtn = document.getElementById('mobileLoginBtn');
 
+    // ===== FUNÇÃO DE LOG SIMPLIFICADA =====
+    function log(message, data = null) {
+        console.log(`[Abraço Solidário] ${message}`, data || '');
+    }
 
-    // Verificar se há usuário logado ao carregar a página
-    checkUserLoginStatus();
+    // ===== TESTAR CONEXÃO COM BACKEND =====
+    async function testarConexaoBackend() {
+        try {
+            log('Testando conexão com backend...');
+            const response = await fetch(`${API_URL}/test-connection.php`);
 
-    // Função para verificar status do login
-    function checkUserLoginStatus() {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            log('Conexão com backend:', data);
+
+            if (data.status === 'success') {
+                return true;
+            } else {
+                console.warn('Backend retornou erro:', data);
+                return false;
+            }
+
+        } catch (error) {
+            console.error('Falha na conexão com backend:', error);
+            console.info('Dica: Verifique se:');
+            console.info('1. Servidor Apache/XAMPP está rodando');
+            console.info('2. Arquivos PHP estão na pasta correta (htdocs)');
+            console.info('3. URL do backend está correta:', API_URL);
+            return false;
+        }
+    }
+
+    // ===== FUNÇÕES DO SISTEMA DE USUÁRIO =====
+    async function checkUserLoginStatus() {
         const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
         if (usuarioLogado && usuarioLogado.nome) {
-            mostrarUsuarioLogado(usuarioLogado.nome);
+            try {
+                // Usar verificação simples baseada no localStorage
+                mostrarUsuarioLogado(usuarioLogado.nome);
+                log('Usuário encontrado no localStorage:', usuarioLogado.nome);
+            } catch (error) {
+                log('Token inválido, fazendo logout');
+                fazerLogout();
+            }
         } else {
             mostrarUsuarioDeslogado();
         }
@@ -27,96 +71,211 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Função para mostrar usuário logado
     function mostrarUsuarioLogado(nome) {
-        // Atualizar menu desktop
-        if (userMenu && userName) {
-            userMenu.style.display = 'flex';
-            userName.textContent = nome;
-        }
-        if (loginBtn) {
-            loginBtn.style.display = 'none';
-        }
+        try {
+            // Atualizar menu desktop
+            if (userMenu && userName) {
+                userMenu.style.display = 'flex';
+                userName.textContent = nome.substring(0, 15) + (nome.length > 15 ? '...' : '');
+            }
+            if (loginBtn) {
+                loginBtn.style.display = 'none';
+            }
 
-        // Atualizar menu mobile
-        if (mobileUserMenu && mobileUserName) {
-            mobileUserMenu.style.display = 'flex';
-            mobileUserName.textContent = nome;
-        }
-        if (mobileLoginBtn) {
-            mobileLoginBtn.style.display = 'none';
-        }
+            // Atualizar menu mobile
+            if (mobileUserMenu && mobileUserName) {
+                mobileUserMenu.style.display = 'flex';
+                mobileUserName.textContent = nome.substring(0, 15) + (nome.length > 15 ? '...' : '');
+            }
+            if (mobileLoginBtn) {
+                mobileLoginBtn.style.display = 'none';
+            }
 
-        // Adicionar classe ao body para estilização
-        document.body.classList.add('user-logged-in');
+            // Adicionar classe ao body para estilização
+            document.body.classList.add('user-logged-in');
+
+        } catch (error) {
+            console.error('Erro ao mostrar usuário logado:', error);
+        }
     }
 
     // Função para mostrar usuário deslogado
     function mostrarUsuarioDeslogado() {
-        // Restaurar menu desktop
-        if (userMenu) {
-            userMenu.style.display = 'none';
-        }
-        if (loginBtn) {
-            loginBtn.style.display = 'block';
-        }
+        try {
+            // Restaurar menu desktop
+            if (userMenu) {
+                userMenu.style.display = 'none';
+            }
+            if (loginBtn) {
+                loginBtn.style.display = 'block';
+            }
 
-        // Restaurar menu mobile
-        if (mobileUserMenu) {
-            mobileUserMenu.style.display = 'none';
-        }
-        if (mobileLoginBtn) {
-            mobileLoginBtn.style.display = 'block';
-        }
+            // Restaurar menu mobile
+            if (mobileUserMenu) {
+                mobileUserMenu.style.display = 'none';
+            }
+            if (mobileLoginBtn) {
+                mobileLoginBtn.style.display = 'block';
+            }
 
-        // Remover classe do body
-        document.body.classList.remove('user-logged-in');
+            // Remover classe do body
+            document.body.classList.remove('user-logged-in');
+
+        } catch (error) {
+            console.error('Erro ao mostrar usuário deslogado:', error);
+        }
     }
 
-    // Função para fazer login
-    function fazerLogin(email, senha) {
-        // Buscar usuários do localStorage
-        const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-        const usuario = usuarios.find(u => u.email === email && u.senha === senha);
-        
-        if (usuario) {
-            // Salvar usuário logado no localStorage
-            localStorage.setItem('usuarioLogado', JSON.stringify({
-                nome: usuario.nome,
-                email: usuario.email
-            }));
-            
-            mostrarUsuarioLogado(usuario.nome);
-            return { success: true, nome: usuario.nome };
+    // Função para fazer login com backend
+    async function fazerLogin(email, senha) {
+        try {
+            log('Tentando login para:', email);
+
+            // Primeiro testar conexão
+            const conexaoOk = await testarConexaoBackend();
+            if (!conexaoOk) {
+                return {
+                    success: false,
+                    message: 'Servidor temporariamente indisponível. Usando modo offline.'
+                };
+            }
+
+            const response = await fetch(`${API_URL}/login.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, senha })
+            });
+
+            // Verificar se a resposta é JSON válido
+            const text = await response.text();
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Resposta não é JSON válido:', text.substring(0, 200));
+                return {
+                    success: false,
+                    message: 'Erro no servidor. Tente novamente mais tarde.'
+                };
+            }
+
+            if (data.status === 'success') {
+                // Salvar dados do usuário no localStorage
+                localStorage.setItem('usuarioLogado', JSON.stringify(data.data));
+                mostrarUsuarioLogado(data.data.nome);
+                log('Login realizado com sucesso:', data.data.nome);
+                return { success: true, nome: data.data.nome };
+            } else {
+                log('Login falhou:', data.message);
+                return { success: false, message: data.message || 'Credenciais inválidas' };
+            }
+        } catch (error) {
+            console.error('Erro no login:', error);
+            return {
+                success: false,
+                message: 'Erro de conexão. Verifique se o servidor está rodando.'
+            };
         }
-        return { success: false };
+    }
+
+    // Função para criar conta com backend
+    async function criarContaBackend(dadosUsuario) {
+        try {
+            log('Criando conta para:', dadosUsuario.email);
+
+            const conexaoOk = await testarConexaoBackend();
+            if (!conexaoOk) {
+                // Modo offline - salvar no localStorage
+                const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+
+                // Verificar se email já existe
+                if (usuarios.some(u => u.email === dadosUsuario.email)) {
+                    return { success: false, message: 'Este e-mail já está cadastrado localmente.' };
+                }
+
+                // Adicionar usuário
+                usuarios.push({
+                    id: Date.now(),
+                    nome: dadosUsuario.nome_completo,
+                    email: dadosUsuario.email,
+                    senha: dadosUsuario.senha,
+                    data_nascimento: dadosUsuario.data_nascimento
+                });
+
+                localStorage.setItem('usuarios', JSON.stringify(usuarios));
+
+                // Fazer login automático
+                localStorage.setItem('usuarioLogado', JSON.stringify({
+                    id: Date.now(),
+                    nome: dadosUsuario.nome_completo,
+                    email: dadosUsuario.email
+                }));
+
+                mostrarUsuarioLogado(dadosUsuario.nome_completo);
+                return { success: true, nome: dadosUsuario.nome_completo };
+            }
+
+            const response = await fetch(`${API_URL}/usuarios.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dadosUsuario)
+            });
+
+            const text = await response.text();
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Resposta não é JSON:', text.substring(0, 200));
+                return {
+                    success: false,
+                    message: 'Erro no servidor. Conta criada apenas localmente.'
+                };
+            }
+
+            if (data.status === 'success') {
+                // Fazer login automático
+                const loginResult = await fazerLogin(dadosUsuario.email, dadosUsuario.senha);
+                return loginResult;
+            } else {
+                return { success: false, message: data.message };
+            }
+        } catch (error) {
+            console.error('Erro ao criar conta:', error);
+            return {
+                success: false,
+                message: 'Erro de conexão. Conta criada apenas localmente.'
+            };
+        }
     }
 
     // Função para fazer logout
     function fazerLogout() {
-        localStorage.removeItem('usuarioLogado');
-        mostrarUsuarioDeslogado();
-        
-        // LIMPAR FORMULÁRIO DE DOAÇÃO
-        limparFormularioDoacao();
-        
-        // Fechar modais se estiverem abertos
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            modal.style.display = 'none';
-        });
-        document.body.style.overflow = 'auto';
-        
-        alert('Logout realizado com sucesso!');
-    }
+        try {
+            localStorage.removeItem('usuarioLogado');
+            mostrarUsuarioDeslogado();
 
-    // Função para limpar formulário de doação
-    function limparFormularioDoacao() {
-        const nomeInput = document.getElementById('nome');
-        const sobrenomeInput = document.getElementById('sobrenome');
-        const emailInput = document.getElementById('email');
-        
-        if (nomeInput) nomeInput.value = '';
-        if (sobrenomeInput) sobrenomeInput.value = '';
-        if (emailInput) emailInput.value = '';
+            // Limpar formulário de doação
+            limparFormularioDoacao();
+
+            // Fechar modais se estiverem abertos
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                modal.style.display = 'none';
+            });
+            document.body.style.overflow = 'auto';
+
+            log('Logout realizado');
+            alert('Logout realizado com sucesso!');
+
+        } catch (error) {
+            console.error('Erro ao fazer logout:', error);
+        }
     }
 
     // Eventos de logout
@@ -127,2109 +286,1374 @@ document.addEventListener('DOMContentLoaded', function() {
         mobileLogoutBtn.addEventListener('click', fazerLogout);
     }
 
-    // ===== PREENCHER AUTOMATICAMENTE FORMULÁRIO DE DOAÇÃO =====
-    function preencherFormularioDoacao() {
-        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
-        
-        if (usuarioLogado && usuarioLogado.nome) {
-            console.log('Usuário logado encontrado:', usuarioLogado);
-            
-            // Separar nome e sobrenome
-            const nomeCompleto = usuarioLogado.nome.split(' ');
-            const nome = nomeCompleto[0];
-            const sobrenome = nomeCompleto.slice(1).join(' ');
-            
-            // Preencher campos do formulário de doação
-            const nomeInput = document.getElementById('nome');
-            const sobrenomeInput = document.getElementById('sobrenome');
-            const emailInput = document.getElementById('email');
-            
-            console.log('Campos encontrados:', {
-                nomeInput: !!nomeInput,
-                sobrenomeInput: !!sobrenomeInput,
-                emailInput: !!emailInput
-            });
-            
-            if (nomeInput) {
-                nomeInput.value = nome;
-                console.log('Nome preenchido:', nome);
-            }
-            if (sobrenomeInput) {
-                sobrenomeInput.value = sobrenome;
-                console.log('Sobrenome preenchido:', sobrenome);
-            }
-            if (emailInput && usuarioLogado.email) {
-                emailInput.value = usuarioLogado.email;
-                console.log('Email preenchido:', usuarioLogado.email);
-            }
-        } else {
-            console.log('Nenhum usuário logado encontrado');
-        }
-    }
+    // ===== CARREGAR INSTITUIÇÕES =====
+    async function carregarInstituicoes() {
+        try {
+            log('Carregando instituições...');
 
-    // ===== CARROSSEL PRINCIPAL =====
-    const carousel = document.querySelector('.carousel');
-    const indicators = document.querySelectorAll('.indicator');
-    const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
-    const mobileMenu = document.querySelector('.mobile-menu');
-    
-    let currentIndex = 0;
-    let autoPlayInterval;
-    let touchStartX = 0;
-    let touchEndX = 0;
-
-    // Inicializar o carrossel
-    function initCarousel() {
-        if (!carousel) return;
-        
-        // Iniciar autoplay
-        startAutoPlay();
-        
-        // Adicionar suporte a swipe
-        addSwipeSupport();
-        
-        // Adicionar eventos aos indicadores
-        indicators.forEach(indicator => {
-            indicator.addEventListener('click', function() {
-                const index = parseInt(this.getAttribute('data-index'));
-                goToSlide(index);
-            });
-        });
-    }
-
-    // Ir para um slide específico
-    function goToSlide(index) {
-        currentIndex = index;
-        updateCarousel();
-    }
-
-    // Atualizar o carrossel
-    function updateCarousel() {
-        carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
-        
-        // Atualizar indicadores
-        indicators.forEach((indicator, index) => {
-            indicator.classList.toggle('active', index === currentIndex);
-        });
-    }
-
-    // Próximo slide
-    function nextSlide() {
-        currentIndex = (currentIndex + 1) % indicators.length;
-        updateCarousel();
-    }
-
-    // Slide anterior
-    function prevSlide() {
-        currentIndex = (currentIndex - 1 + indicators.length) % indicators.length;
-        updateCarousel();
-    }
-
-    // Iniciar autoplay
-    function startAutoPlay() {
-        if (autoPlayInterval) clearInterval(autoPlayInterval);
-        autoPlayInterval = setInterval(nextSlide, 5000);
-    }
-
-    // Adicionar suporte a gestos de swipe
-    function addSwipeSupport() {
-        carousel.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        });
-        
-        carousel.addEventListener('touchend', e => {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        });
-    }
-
-    // Processar gesto de swipe
-    function handleSwipe() {
-        const swipeThreshold = 50;
-        
-        if (touchStartX - touchEndX > swipeThreshold) {
-            // Swipe para a esquerda - próximo slide
-            nextSlide();
-        } else if (touchEndX - touchStartX > swipeThreshold) {
-            // Swipe para a direita - slide anterior
-            prevSlide();
-        }
-        
-        // Reiniciar autoplay após interação
-        clearInterval(autoPlayInterval);
-        startAutoPlay();
-    }
-
-    // Menu Mobile
-    function initMobileMenu() {
-        if (!mobileMenuBtn || !mobileMenu) return;
-        
-        mobileMenuBtn.addEventListener('click', function() {
-            mobileMenu.classList.toggle('active');
-        });
-
-        // Fechar menu ao clicar em um item
-        mobileMenu.querySelectorAll('.mobile-nav-item').forEach(item => {
-            item.addEventListener('click', function() {
-                mobileMenu.classList.remove('active');
-            });
-        });
-    }
-
-    // Smooth scroll para links internos
-    function initSmoothScroll() {
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
+            // Dados de fallback
+            const instituicoesFallback = [
+                {
+                    id: 1,
+                    nome: 'Patas Felizes',
+                    descricao: 'Refúgio para animais abandonados e vítimas de maus-tratos.',
+                    imagem: 'image/cachorro.png',
+                    itens_necessarios: 'Ração, Medicamentos, Cobertores',
+                    endereco: 'Rua dos Animais, 123 - Centro, São Paulo - SP',
+                    horario_funcionamento: 'Seg-Sáb: 8h-18h'
+                },
+                {
+                    id: 2,
+                    nome: 'Casa de Todos',
+                    descricao: 'Espaço de reabilitação para quem busca um novo começo com dignidade e apoio.',
+                    imagem: 'image/casatodos.png',
+                    itens_necessarios: 'Alimentos, Produtos higiene, Roupas',
+                    endereco: 'Av. da Solidariedade, 456 - São Paulo - SP',
+                    horario_funcionamento: 'Todos os dias: 9h-17h'
+                },
+                {
+                    id: 3,
+                    nome: 'Recanto da Sabedoria',
+                    descricao: 'Lar acolhedor para idosos que merecem todo o carinho e respeito.',
+                    imagem: 'image/Recanto da Sabedoria.png',
+                    itens_necessarios: 'Fraldas, Suplementos, Medicamentos',
+                    endereco: 'Travessa da Paz, 789 - São Paulo - SP',
+                    horario_funcionamento: 'Seg-Sex: 7h-19h'
+                },
+                {
+                    id: 4,
+                    nome: 'Sonho Colorido',
+                    descricao: 'Farol de esperança para crianças em comunidades carentes.',
+                    imagem: 'image/sonhocolorido.png',
+                    itens_necessarios: 'Material escolar, Brinquedos, Roupas',
+                    endereco: 'Rua Esperança, 101 - São Paulo - SP',
+                    horario_funcionamento: 'Seg-Sex: 13h-17h'
+                },
+                {
+                    id: 5,
+                    nome: 'Florescer',
+                    descricao: 'Espaço de acolhimento e apoio para quem vive em vulnerabilidade.',
+                    imagem: 'image/florescer.png',
+                    itens_necessarios: 'Cestas básicas, Higiene, Roupas',
+                    endereco: 'Alameda Renovação, 202 - São Paulo - SP',
+                    horario_funcionamento: 'Seg-Sex: 10h-16h'
+                },
+                {
+                    id: 6,
+                    nome: 'Brilho do Sol',
+                    descricao: 'Lar acolhedor onde crianças encontram amor, segurança e esperança.',
+                    imagem: 'image/brilhosol.png',
+                    itens_necessarios: 'Leite em pó, Fraldas, Roupas bebê',
+                    endereco: 'Praça Criança, 303 - São Paulo - SP',
+                    horario_funcionamento: 'Todos os dias: 8h-20h'
                 }
-            });
-        });
-    }
+            ];
 
-    // Pausar autoplay ao passar o mouse
-    if (carousel) {
-        carousel.addEventListener('mouseenter', () => {
-            clearInterval(autoPlayInterval);
-        });
+            // Tentar carregar do backend
+            try {
+                const conexaoOk = await testarConexaoBackend();
+                if (conexaoOk) {
+                    const response = await fetch(`${API_URL}/instituicoes.php`);
 
-        // Retomar autoplay ao retirar o mouse
-        carousel.addEventListener('mouseleave', () => {
-            startAutoPlay();
-        });
-    }
-
-    // ===== CARROSSEL DE AJUDA =====
-    const helpCarousel = document.querySelector('.help-cards-carousel');
-    const helpCards = document.querySelectorAll('.help-card');
-    const prevArrow = document.querySelector('.carousel-arrow-prev');
-    const nextArrow = document.querySelector('.carousel-arrow-next');
-    
-    if (helpCarousel && prevArrow && nextArrow) {
-        let currentHelpIndex = 0;
-        const cardsPerView = getCardsPerView();
-        
-        function getCardsPerView() {
-            if (window.innerWidth <= 768) return 1;
-            if (window.innerWidth <= 1024) return 2;
-            return 3;
-        }
-        
-        function updateHelpCarousel() {
-            const cardWidth = helpCards[0].offsetWidth + 30; // width + gap
-            helpCarousel.style.transform = `translateX(-${currentHelpIndex * cardWidth}px)`;
-        }
-        
-        function showNextCards() {
-            const maxIndex = helpCards.length - cardsPerView;
-            if (currentHelpIndex < maxIndex) {
-                currentHelpIndex++;
-                updateHelpCarousel();
-            }
-        }
-        
-        function showPrevCards() {
-            if (currentHelpIndex > 0) {
-                currentHelpIndex--;
-                updateHelpCarousel();
-            }
-        }
-        
-        // Event listeners para as setas
-        nextArrow.addEventListener('click', showNextCards);
-        prevArrow.addEventListener('click', showPrevCards);
-        
-        // Atualizar na redimensionamento da tela
-        window.addEventListener('resize', function() {
-            const newCardsPerView = getCardsPerView();
-            if (newCardsPerView !== cardsPerView) {
-                currentHelpIndex = 0;
-                updateHelpCarousel();
-            }
-        });
-        
-        // Inicializar carrossel
-        updateHelpCarousel();
-    }
-
-    // ===== MODAL DE DOAÇÃO =====
-    const modal = document.getElementById('donationModal');
-    const openBtn = document.getElementById('openDonationModal');
-    const closeBtn = document.querySelector('.close-modal');
-    const donationForm = document.getElementById('donationForm');
-    const instituicaoSelect = document.getElementById('instituicao');
-    const outraInstituicaoGroup = document.getElementById('outra-instituicao-group');
-    const tipoDoacaoSelect = document.getElementById('tipo-doacao');
-    const valorGroup = document.getElementById('valor-group');
-
-    if (modal && openBtn) {
-        // Abrir modal
-        openBtn.addEventListener('click', function() {
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-            
-            // PREENCHER AUTOMATICAMENTE SE USUÁRIO ESTIVER LOGADO
-            preencherFormularioDoacao();
-        });
-
-        // Fechar modal
-        closeBtn.addEventListener('click', function() {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        });
-
-        // Fechar modal clicando fora
-        window.addEventListener('click', function(event) {
-            if (event.target === modal) {
-                modal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-        });
-
-        // Mostrar/ocultar campo de outra instituição
-        if (instituicaoSelect) {
-            instituicaoSelect.addEventListener('change', function() {
-                if (this.value === 'outro') {
-                    outraInstituicaoGroup.style.display = 'block';
-                } else {
-                    outraInstituicaoGroup.style.display = 'none';
-                }
-            });
-        }
-
-        // Mostrar/ocultar campo de valor
-        if (tipoDoacaoSelect) {
-            tipoDoacaoSelect.addEventListener('change', function() {
-                if (this.value === 'dinheiro') {
-                    valorGroup.style.display = 'block';
-                } else {
-                    valorGroup.style.display = 'none';
-                }
-            });
-        }
-
-        // Formatação do CPF
-        const cpfInput = document.getElementById('cpf');
-        if (cpfInput) {
-            cpfInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length > 3 && value.length <= 6) {
-                    value = value.replace(/(\d{3})(\d+)/, '$1.$2');
-                } else if (value.length > 6 && value.length <= 9) {
-                    value = value.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
-                } else if (value.length > 9) {
-                    value = value.replace(/(\d{3})(\d{3})(\d{3})(\d+)/, '$1.$2.$3-$4');
-                }
-                e.target.value = value;
-            });
-        }
-
-        // Formatação do telefone
-        const telefoneInput = document.getElementById('telefone');
-        if (telefoneInput) {
-            telefoneInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length > 2 && value.length <= 6) {
-                    value = value.replace(/(\d{2})(\d+)/, '($1) $2');
-                } else if (value.length > 6 && value.length <= 10) {
-                    value = value.replace(/(\d{2})(\d{4})(\d+)/, '($1) $2-$3');
-                } else if (value.length > 10) {
-                    value = value.replace(/(\d{2})(\d{5})(\d+)/, '($1) $2-$3');
-                }
-                e.target.value = value;
-            });
-        }
-
-        // Envio do formulário
-
-        if (donationForm) {
-            donationForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const nome = document.getElementById('nome').value;
-                const dataNascimento = document.getElementById('data-nascimento').value;
-                
-                // Validações
-                if (!nome) {
-                    alert('Por favor, preencha todos os campos obrigatórios.');
-                    return;
-                }
-                
-                // Validar se é maior de idade
-                if (!validarMaiorIdade(dataNascimento)) {
-                    alert('Para fazer doações é necessário ser maior de idade (18 anos ou mais).');
-                    return;
-                }
-                
-                alert(`Obrigado pela sua doação, ${nome}! Sua contribuição fará a diferença.`);
-                
-                // Resetar formulário
-                donationForm.reset();
-                if (outraInstituicaoGroup) outraInstituicaoGroup.style.display = 'none';
-                if (valorGroup) valorGroup.style.display = 'none';
-                
-                // Fechar modal
-                modal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            });
-        }
-
-        // Função para validar se é maior de idade
-
-        function validarMaiorIdade(dataNascimento) {
-            const hoje = new Date();
-            const nascimento = new Date(dataNascimento);
-            
-            // Calcular idade
-            let idade = hoje.getFullYear() - nascimento.getFullYear();
-            const mes = hoje.getMonth() - nascimento.getMonth();
-            
-            // Ajustar idade se ainda não fez aniversário este ano
-            if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
-                idade--;
-            }
-            
-            return idade >= 18;
-        }
-
-        // Validação em tempo real da data de nascimento
-        
-        const dataNascimentoInput = document.getElementById('data-nascimento');
-        if (dataNascimentoInput) {
-            dataNascimentoInput.addEventListener('change', function() {
-                if (this.value && !validarMaiorIdade(this.value)) {
-                    alert('Você precisa ser maior de idade (18 anos ou mais) para doar.');
-                    this.value = ''; // Limpa o campo
-                }
-            });
-        }
-    }
-
-    // ===== MODAL DE LOGIN =====
-    const loginModal = document.getElementById('loginModal');
-    const loginForm = document.getElementById('loginForm');
-
-    if (loginModal && loginForm) {
-        // Abrir modal de login
-        const loginBtns = document.querySelectorAll('.login-btn, .mobile-login-btn');
-        loginBtns.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                loginModal.style.display = 'block';
-                document.body.style.overflow = 'hidden';
-                
-                // Fechar menu mobile se estiver aberto
-                if (mobileMenu) {
-                    mobileMenu.classList.remove('active');
-                }
-            });
-        });
-
-        // Fechar modal de login
-        const closeLoginBtn = document.querySelector('.close-login-modal');
-        if (closeLoginBtn) {
-            closeLoginBtn.addEventListener('click', function() {
-                loginModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            });
-        }
-
-        // Fechar modal clicando fora
-        window.addEventListener('click', function(event) {
-            if (event.target === loginModal) {
-                loginModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-        });
-
-        // Envio do formulário de login
-        loginForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            
-            if (!email || !password) {
-                alert('Por favor, preencha todos os campos.');
-                return;
-            }
-            
-            const resultado = fazerLogin(email, password);
-            
-            if (resultado.success) {
-                alert(`Login realizado com sucesso! Bem-vindo(a), ${resultado.nome}!`);
-                
-                // Fechar modal
-                loginModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                
-                // Limpar formulário
-                loginForm.reset();
-            } else {
-                alert('E-mail ou senha incorretos!');
-            }
-        });
-
-        // Links do login
-        const forgotPasswordLink = document.querySelector('.forgot-password-link');
-        const createAccountLink = document.querySelector('.create-account-link');
-        
-        if (forgotPasswordLink) {
-            forgotPasswordLink.addEventListener('click', function(e) {
-                e.preventDefault();
-                // Abrir modal de recuperação de senha
-                const forgotPasswordModal = document.getElementById('forgotPasswordModal');
-                if (forgotPasswordModal) {
-                    loginModal.style.display = 'none';
-                    forgotPasswordModal.style.display = 'block';
-                }
-            });
-        }
-
-        if (createAccountLink) {
-            createAccountLink.addEventListener('click', function(e) {
-                e.preventDefault();
-                // Abrir modal de criar conta
-                const createAccountModal = document.getElementById('createAccountModal');
-                if (createAccountModal) {
-                    loginModal.style.display = 'none';
-                    createAccountModal.style.display = 'block';
-                }
-            });
-        }
-    }
-
-    // ===== MODAL DE CRIAR CONTA =====
-    const createAccountModal = document.getElementById('createAccountModal');
-    const createAccountForm = document.getElementById('createAccountForm');
-
-    if (createAccountModal && createAccountForm) {
-        // Fechar modal de criar conta
-        const closeCreateAccountBtn = document.querySelector('.close-create-account-modal');
-        if (closeCreateAccountBtn) {
-            closeCreateAccountBtn.addEventListener('click', function() {
-                createAccountModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            });
-        }
-
-        // Voltar para o login
-        const backToLoginLinks = document.querySelectorAll('.back-to-login-link');
-        backToLoginLinks.forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                createAccountModal.style.display = 'none';
-                if (loginModal) loginModal.style.display = 'block';
-            });
-        });
-
-        // Fechar modal clicando fora
-        window.addEventListener('click', function(event) {
-            if (event.target === createAccountModal) {
-                createAccountModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-        });
-
-        // Formatação do CNPJ
-        const cnpjInput = document.getElementById('cnpj');
-        if (cnpjInput) {
-            cnpjInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length > 2 && value.length <= 5) {
-                    value = value.replace(/(\d{2})(\d+)/, '$1.$2');
-                } else if (value.length > 5 && value.length <= 8) {
-                    value = value.replace(/(\d{2})(\d{3})(\d+)/, '$1.$2.$3');
-                } else if (value.length > 8 && value.length <= 12) {
-                    value = value.replace(/(\d{2})(\d{3})(\d{3})(\d+)/, '$1.$2.$3/$4');
-                } else if (value.length > 12) {
-                    value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d+)/, '$1.$2.$3/$4-$5');
-                }
-                e.target.value = value.substring(0, 18);
-            });
-        }
-
-        // Validação de força da senha
-        const passwordInput = document.getElementById('create-password');
-        const confirmPasswordInput = document.getElementById('confirm-password');
-        const strengthBar = document.querySelector('.strength-bar');
-        const strengthText = document.querySelector('.strength-text');
-        const passwordMatch = document.querySelector('.password-match');
-
-        if (passwordInput && strengthBar && strengthText) {
-            passwordInput.addEventListener('input', function() {
-                const password = this.value;
-                const strength = checkPasswordStrength(password);
-                
-                // Mostrar indicador apenas se houver texto
-                const passwordStrength = document.querySelector('.password-strength');
-                if (password.length > 0) {
-                    passwordStrength.classList.add('show');
-                } else {
-                    passwordStrength.classList.remove('show');
-                    return;
-                }
-                
-                // Atualizar barra de força
-                strengthBar.className = 'strength-bar';
-                if (password.length > 0) {
-                    strengthBar.classList.add(strength.level);
-                    strengthText.textContent = strength.text;
-                }
-            });
-        }
-
-        // Verificar se as senhas coincidem
-        if (confirmPasswordInput && passwordMatch) {
-            confirmPasswordInput.addEventListener('input', function() {
-                const password = passwordInput.value;
-                const confirmPassword = this.value;
-                
-                if (confirmPassword.length === 0) {
-                    passwordMatch.classList.remove('show');
-                    return;
-                }
-                
-                passwordMatch.classList.add('show');
-                
-                if (password === confirmPassword) {
-                    passwordMatch.textContent = '✓ Senhas coincidem';
-                    passwordMatch.className = 'password-match show valid';
-                } else {
-                    passwordMatch.textContent = '✗ Senhas não coincidem';
-                    passwordMatch.className = 'password-match show invalid';
-                }
-            });
-        }
-
-        // Função para verificar força da senha
-        function checkPasswordStrength(password) {
-            let score = 0;
-            
-            if (password.length >= 8) score++;
-            if (password.match(/[a-z]/)) score++;
-            if (password.match(/[A-Z]/)) score++;
-            if (password.match(/[0-9]/)) score++;
-            if (password.match(/[^a-zA-Z0-9]/)) score++;
-            
-            if (score <= 2) {
-                return { level: 'weak', text: 'Senha fraca' };
-            } else if (score <= 4) {
-                return { level: 'medium', text: 'Senha média' };
-            } else {
-                return { level: 'strong', text: 'Senha forte' };
-            }
-        }
-
-        // Envio do formulário de criar conta
-        createAccountForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const fullName = document.getElementById('full-name').value;
-            const email = document.getElementById('create-email').value;
-            const password = document.getElementById('create-password').value;
-            const confirmPassword = document.getElementById('confirm-password').value;
-            
-            // Validações
-            if (!fullName || !email || !password || !confirmPassword) {
-                alert('Por favor, preencha todos os campos obrigatórios.');
-                return;
-            }
-            
-            if (password !== confirmPassword) {
-                alert('As senhas não coincidem. Por favor, verifique.');
-                return;
-            }
-            
-            if (password.length < 8) {
-                alert('A senha deve ter pelo menos 8 caracteres.');
-                return;
-            }
-            
-            // Salvar usuário no localStorage
-            const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-            
-            // Verificar se email já existe
-            if (usuarios.some(u => u.email === email)) {
-                alert('Este e-mail já está cadastrado. Tente fazer login.');
-                return;
-            }
-            
-            // Adicionar novo usuário
-            usuarios.push({ 
-                nome: fullName, 
-                email: email, 
-                senha: password 
-            });
-            localStorage.setItem('usuarios', JSON.stringify(usuarios));
-            
-            // Fazer login automaticamente
-            localStorage.setItem('usuarioLogado', JSON.stringify({ 
-                nome: fullName, 
-                email: email 
-            }));
-            
-            mostrarUsuarioLogado(fullName);
-            
-            // Fechar modal
-            createAccountModal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-            
-            alert(`Conta criada com sucesso! Bem-vindo(a) ao Abraço Solidário, ${fullName.split(' ')[0]}!`);
-            
-            // Limpar formulário
-            createAccountForm.reset();
-            
-            // Resetar indicadores
-            const passwordStrength = document.querySelector('.password-strength');
-            if (passwordStrength) passwordStrength.classList.remove('show');
-            if (passwordMatch) passwordMatch.classList.remove('show');
-        });
-    }
-
-    // ===== MODAL DE RECUPERAÇÃO DE SENHA =====
-    const forgotPasswordModal = document.getElementById('forgotPasswordModal');
-    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-
-    if (forgotPasswordModal && forgotPasswordForm) {
-        // Fechar modal de recuperação de senha
-        const closeForgotPasswordBtn = document.querySelector('.close-forgot-password-modal');
-        if (closeForgotPasswordBtn) {
-            closeForgotPasswordBtn.addEventListener('click', function() {
-                forgotPasswordModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                resetForgotPasswordForm();
-            });
-        }
-
-        // Voltar para o login a partir da recuperação de senha
-        const backToLoginFromForgotLinks = document.querySelectorAll('.back-to-login-from-forgot, .back-to-login-btn');
-        backToLoginFromForgotLinks.forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                forgotPasswordModal.style.display = 'none';
-                resetForgotPasswordForm();
-                if (loginModal) loginModal.style.display = 'block';
-            });
-        });
-
-        // Fechar modal clicando fora
-        window.addEventListener('click', function(event) {
-            if (event.target === forgotPasswordModal) {
-                forgotPasswordModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                resetForgotPasswordForm();
-            }
-        });
-
-        // Função para resetar o formulário de recuperação
-        function resetForgotPasswordForm() {
-            forgotPasswordForm.reset();
-            forgotPasswordForm.style.display = 'block';
-            const recoverySuccess = document.querySelector('.recovery-success');
-            if (recoverySuccess) recoverySuccess.style.display = 'none';
-            forgotPasswordForm.classList.remove('sending');
-        }
-
-        // Envio do formulário de recuperação de senha
-        forgotPasswordForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const email = document.getElementById('recovery-email').value;
-            
-            // Validação básica
-            if (!email) {
-                alert('Por favor, informe seu e-mail.');
-                return;
-            }
-            
-            // Validar formato do e-mail
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                alert('Por favor, informe um e-mail válido.');
-                return;
-            }
-            
-            // Enviar instruções de recuperação
-            sendRecoveryInstructions(email);
-        });
-
-        // Função para simular envio de instruções
-        function sendRecoveryInstructions(email) {
-            const submitBtn = forgotPasswordForm.querySelector('.send-instructions-btn');
-            const originalText = submitBtn.innerHTML;
-            
-            // Mostrar estado de envio
-            forgotPasswordForm.classList.add('sending');
-            submitBtn.disabled = true;
-            
-            // Simular delay de rede
-            setTimeout(() => {
-                // Simular resposta do servidor
-                const recoverySuccess = true;
-                
-                if (recoverySuccess) {
-                    // Mostrar mensagem de sucesso
-                    showRecoverySuccess();
-                } else {
-                    alert('Erro ao enviar instruções. Tente novamente.');
-                }
-                
-                // Restaurar botão
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-                forgotPasswordForm.classList.remove('sending');
-            }, 2000);
-        }
-
-        // Função para mostrar mensagem de sucesso
-        function showRecoverySuccess() {
-            const email = document.getElementById('recovery-email').value;
-            
-            // Esconder formulário e mostrar sucesso
-            forgotPasswordForm.style.display = 'none';
-            const recoverySuccess = document.querySelector('.recovery-success');
-            if (recoverySuccess) {
-                recoverySuccess.style.display = 'block';
-                
-                // Opcional: você pode atualizar a mensagem com o e-mail
-                const successMessage = recoverySuccess.querySelector('p');
-                if (successMessage) {
-                    successMessage.textContent = `Enviamos as instruções de recuperação para: ${email}`;
-                }
-            }
-        }
-
-        // Adicionar evento para o botão de voltar ao login na tela de sucesso
-        const backToLoginBtn = document.querySelector('.back-to-login-btn');
-        if (backToLoginBtn) {
-            backToLoginBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                forgotPasswordModal.style.display = 'none';
-                resetForgotPasswordForm();
-                if (loginModal) loginModal.style.display = 'block';
-            });
-        }
-    }
-
-    // Inicializar todas as funcionalidades
-    initCarousel();
-    initMobileMenu();
-    initSmoothScroll();
-});
-
-// Função auxiliar para verificar se usuário está logado
-function isUserLoggedIn() {
-    return localStorage.getItem('usuarioLogado') !== null;
-}
-
-// Função para obter dados do usuário logado
-function getLoggedInUser() {
-    const usuario = localStorage.getItem('usuarioLogado');
-    return usuario ? JSON.parse(usuario) : null;
-}
-
-// Dados das instituições
-const institutionsData = {
-    'pf': {
-        name: 'Patas Felizes',
-        image: 'cachorro.png',
-        description: 'Somos o Instituto Patas Felizes, um refúgio para animais abandonados e vítimas de maus-tratos.',
-        needs: ['Ração para cães e gatos', 'Medicamentos veterinários', 'Produtos de higiene', 'Brinquedos para animais', 'Coleiras e guias'],
-        address: 'Rua dos Animais, 123 - Jardim Pet, São Paulo - SP, 01234-567'
-    },
-    'ct': {
-        name: 'Instituição Casa Todos',
-        image: 'casatodos.png',
-        description: 'Somos o Instituto Casa de Todos, um espaço de reabilitação para quem busca um novo começo com dignidade e apoio.',
-        needs: ['Alimentos não perecíveis', 'Produtos de higiene pessoal', 'Roupas e calçados', 'Material de limpeza', 'Cobertores'],
-        address: 'Av. da Solidariedade, 456 - Centro, São Paulo - SP, 01234-568'
-    },
-    'rs': {
-        name: 'Instituição Recanto da Sabedoria',
-        image: 'Recanto da Sabedoria.png',
-        description: 'Somos o Recanto da Sabedoria, um lar acolhedor para idosos que merecem todo o carinho e respeito.',
-        needs: ['Fraldas geriátricas', 'Suplementos alimentares', 'Medicamentos', 'Material de higiene', 'Roupas de cama'],
-        address: 'Rua da Esperança, 789 - Vila Feliz, São Paulo - SP, 01234-569'
-    },
-    'sc': {
-        name: 'Instituição Sonho Colorido',
-        image: 'sonhocolorido.png',
-        description: 'Somos o Instituto Sonho Colorido, um farol de esperança para crianças em comunidades carentes.',
-        needs: ['Material escolar', 'Brinquedos educativos', 'Roupas infantis', 'Livros infantis', 'Alimentos'],
-        address: 'Praça da Criança, 321 - Jardim Infantil, São Paulo - SP, 01234-570'
-    },
-    'florescer': {
-        name: 'Instituição Florescer',
-        image: 'florescer.png',
-        description: 'Somos o Instituto Florescer, um amparo para aqueles em situação de vulnerabilidade, oferecendo acolhimento, apoio e a chance de reconstruir suas vidas.',
-        needs: ['Alimentos', 'Produtos de higiene', 'Roupas', 'Material de construção', 'Móveis usados'],
-        address: 'Alameda das Flores, 654 - Jardim Social, São Paulo - SP, 01234-571'
-    }
-};
-
-// Modal de detalhes da instituição
-document.addEventListener('DOMContentLoaded', function() {
-    const institutionModal = document.getElementById('institutionModal');
-    const closeInstitutionModal = document.querySelector('.close-institution-modal');
-    const donateToInstitutionBtn = document.getElementById('donateToInstitution');
-
-    // Adicionar evento de clique nas instituições
-    const helpCards = document.querySelectorAll('.help-card');
-    
-    helpCards.forEach(card => {
-        card.style.cursor = 'pointer'; // Muda cursor para indicar que é clicável
-        
-        card.addEventListener('click', function() {
-            // Encontrar qual instituição foi clicada
-            const institutionId = this.querySelector('img').getAttribute('src').split('.')[0];
-            const institutionKey = getInstitutionKey(institutionId);
-            
-            if (institutionKey && institutionsData[institutionKey]) {
-                openInstitutionModal(institutionKey);
-            }
-        });
-    });
-
-    // Função para abrir o modal
-    function openInstitutionModal(institutionKey) {
-        const institution = institutionsData[institutionKey];
-        
-        // Preencher dados no modal
-        document.getElementById('modalInstitutionImage').src = institution.image;
-        document.getElementById('modalInstitutionName').textContent = institution.name;
-        document.getElementById('modalInstitutionDescription').textContent = institution.description;
-        document.getElementById('modalInstitutionAddress').textContent = institution.address;
-        
-        // Preencher necessidades
-        const needsList = document.getElementById('modalInstitutionNeeds');
-        needsList.innerHTML = '';
-        institution.needs.forEach(need => {
-            const li = document.createElement('li');
-            li.textContent = need;
-            needsList.appendChild(li);
-        });
-        
-        // Abrir modal
-        institutionModal.style.display = 'block';
-        document.body.style.overflow = 'hidden';
-        
-        // Configurar botão de doação
-        donateToInstitutionBtn.onclick = function() {
-            // Fechar modal de instituição
-            institutionModal.style.display = 'none';
-            // Abrir modal de doação com a instituição pré-selecionada
-            const donationModal = document.getElementById('donationModal');
-            const instituicaoSelect = document.getElementById('instituicao');
-            
-            if (donationModal && instituicaoSelect) {
-                donationModal.style.display = 'block';
-                instituicaoSelect.value = institutionKey;
-            }
-        };
-    }
-
-    // Fechar modal
-    if (closeInstitutionModal) {
-        closeInstitutionModal.addEventListener('click', function() {
-            institutionModal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        });
-    }
-
-    // Fechar modal clicando fora
-    window.addEventListener('click', function(event) {
-        if (event.target === institutionModal) {
-            institutionModal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-    });
-
-    // Função auxiliar para encontrar a chave da instituição
-    function getInstitutionKey(imageName) {
-        const mapping = {
-            'cachorro': 'pf',
-            'casatodos': 'ct',
-            'Recanto da Sabedoria': 'rs',
-            'sonhocolorido': 'sc',
-            'florescer': 'florescer'
-        };
-        
-        for (let key in mapping) {
-            if (imageName.includes(key)) {
-                return mapping[key];
-            }
-        }
-        return null;
-    }
-    
-    
-});
-// ===== SISTEMA DO QR CODE =====
-document.addEventListener("DOMContentLoaded", function() {
-    const gerarQRBtn = document.getElementById("gerarQR");
-    const qrContainer = document.getElementById("qrContainer");
-    const closeQRBtn = document.getElementById("closeQR");
-    const donationForm = document.getElementById("formDoacao");
-    const donationModal = document.getElementById("donationModal");
-
-    if (gerarQRBtn && qrContainer) {
-        gerarQRBtn.addEventListener("click", function() {
-            // Validar se todos os campos obrigatórios estão preenchidos
-            const dataNascimento = document.getElementById("dataNascimento").value;
-            const instituicao = document.getElementById("instituicao").value;
-            const tipoDoacao = document.getElementById("tipoDoacao").value;
-            
-            if (!dataNascimento || !instituicao || !tipoDoacao) {
-                alert("Por favor, preencha todos os campos obrigatórios antes de gerar o QR Code.");
-                return;
-            }
-            
-            // Validar idade (maior de 18 anos)
-            if (!validarMaiorIdade(dataNascimento)) {
-                alert("Para fazer doações é necessário ser maior de idade (18 anos ou mais).");
-                return;
-            }
-            
-            // Mostrar seção do QR Code
-            mostrarQRCode();
-        });
-    }
-
-    if (closeQRBtn) {
-        closeQRBtn.addEventListener("click", function() {
-            esconderQRCode();
-        });
-    }
-
-    function mostrarQRCode() {
-        // Adicionar classe ao modal para estilização
-        donationModal.classList.add("qr-active");
-        
-        // Mostrar seção do QR Code com animação
-        qrContainer.classList.remove("qr-hidden");
-        qrContainer.classList.add("qr-visible");
-        
-        // Rolar para a seção do QR Code
-        qrContainer.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
-        });
-        
-        console.log("QR Code gerado com sucesso!");
-    }
-
-    function esconderQRCode() {
-        // Remover classes de animação
-        donationModal.classList.remove("qr-active");
-        qrContainer.classList.remove("qr-visible");
-        qrContainer.classList.add("qr-hidden");
-        
-        // Rolar de volta para o topo do modal
-        donationModal.scrollTo({ 
-            top: 0, 
-            behavior: 'smooth' 
-        });
-    }
-
-    // Função para validar maioridade
-    function validarMaiorIdade(dataNascimento) {
-        const hoje = new Date();
-        const nascimento = new Date(dataNascimento);
-        
-        let idade = hoje.getFullYear() - nascimento.getFullYear();
-        const mes = hoje.getMonth() - nascimento.getMonth();
-        
-        if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
-            idade--;
-        }
-        
-        return idade >= 18;
-    }
-
-    // Fechar QR Code quando o modal for fechado
-    if (donationModal) {
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.attributeName === 'style') {
-                    const display = window.getComputedStyle(donationModal).display;
-                    if (display === 'none') {
-                        esconderQRCode();
+                    if (response.ok) {
+                        const text = await response.text();
+                        if (text) {
+                            const data = JSON.parse(text);
+                            if (data.status === 'success' && data.data.length > 0) {
+                                log('Instituições carregadas do backend:', data.data.length);
+                                localStorage.setItem('instituicoes', JSON.stringify(data.data));
+                                atualizarInterfaceInstituicoes(data.data);
+                                return;
+                            }
+                        }
                     }
                 }
-            });
-        });
-        
-        observer.observe(donationModal, {
-            attributes: true,
-            attributeFilter: ['style']
-        });
+            } catch (backendError) {
+                log('Falha ao carregar do backend, usando fallback');
+            }
+
+            // Usar dados de fallback
+            localStorage.setItem('instituicoes', JSON.stringify(instituicoesFallback));
+            atualizarInterfaceInstituicoes(instituicoesFallback);
+
+        } catch (error) {
+            console.error('Erro ao carregar instituições:', error);
+        }
     }
 
-});
-
-// ===== SISTEMA DE QR CODE - ISOLADO E FUNCIONAL =====
-
-// EVITAR CONFLITOS - Executar APENAS quando necessário
-(function() {
-    'use strict'; // Modo estrito para evitar erros
-    
-    console.log('🔒 Inicializando sistema QR Code isolado...');
-    
-    // AGUARDAR TUDO CARREGAR
-    window.addEventListener('load', function() {
-        console.log('✅ Página totalmente carregada, iniciando QR Code...');
-        
-        // Esperar mais 2 segundos para evitar conflitos
-        setTimeout(iniciarSistemaQRCodeIsolado, 2000);
-    });
-    
-    function iniciarSistemaQRCodeIsolado() {
-        console.log('🎯 Sistema QR Code isolado iniciando...');
-        
-        // ENCONTRAR BOTÃO DE FORMA AGGRESSIVA
-        let botaoQR = encontrarBotaoQRCode();
-        
-        if (!botaoQR) {
-            console.error('❌ Botão QR Code não encontrado!');
-            criarBotaoManual();
-            return;
-        }
-        
-        console.log('✅ Botão encontrado:', botaoQR);
-        
-        // CONFIGURAR BOTÃO COM EVENTO DIRETO
-        configurarBotaoQRCode(botaoQR);
-        
-        // BOTÃO FECHAR
-        const btnFechar = document.getElementById('closeQR');
-        if (btnFechar) {
-            btnFechar.addEventListener('click', function() {
-                const qrSection = document.getElementById('qrContainer');
-                if (qrSection) {
-                    qrSection.classList.add('qr-hidden');
-                    qrSection.classList.remove('qr-visible');
-                }
+    function atualizarInterfaceInstituicoes(instituicoes) {
+        // 1. Atualizar dropdown no modal de doação
+        const selectInstituicao = document.getElementById('instituicao');
+        if (selectInstituicao) {
+            // Manter primeira opção
+            while (selectInstituicao.options.length > 1) {
+                selectInstituicao.remove(1);
+            }
+            
+            // Adicionar novas opções
+            instituicoes.forEach(inst => {
+                const option = document.createElement('option');
+                option.value = inst.id;
+                option.textContent = inst.nome;
+                selectInstituicao.appendChild(option);
             });
         }
         
-        console.log('🎉 Sistema QR Code configurado com sucesso!');
-    }
-    
-    function encontrarBotaoQRCode() {
-        // Método 1: Pelo ID correto
-        let botao = document.getElementById('gerarQR');
-        if (botao) return botao;
-        
-        // Método 2: Pelo ID errado (com O)
-        botao = document.getElementById('geraroQR');
-        if (botao) {
-            console.log('⚠️ Botão com ID errado "geraroQR", corrigindo...');
-            botao.id = 'gerarQR'; // Corrigir o ID
-            return botao;
-        }
-        
-        // Método 3: Por classe
-        botao = document.querySelector('.submit-donation-btn');
-        if (botao && (botao.textContent.includes('QR') || botao.innerHTML.includes('QR'))) {
-            return botao;
-        }
-        
-        // Método 4: Por texto
-        const botoes = document.getElementsByTagName('button');
-        for (let i = 0; i < botoes.length; i++) {
-            const btn = botoes[i];
-            if (btn.textContent.includes('Gerar QR') || btn.textContent.includes('QR Code')) {
-                return btn;
-            }
-        }
-        
-        return null;
-    }
-    
-    function configurarBotaoQRCode(botao) {
-        console.log('⚙️ Configurando botão QR Code...');
-        
-        // 1. GARANTIR que é type="button"
-        botao.type = 'button';
-        
-        // 2. REMOVER QUALQUER EVENTO EXISTENTE
-        const novoBotao = botao.cloneNode(true);
-        botao.parentNode.replaceChild(novoBotao, botao);
-        botao = novoBotao;
-        
-        // 3. ADICIONAR NOSSO EVENTO (com capture phase)
-        botao.addEventListener('click', handleClickQRCode, true);
-        
-        // 4. TAMBÉM adicionar onclick direto
-        botao.onclick = handleClickQRCode;
-        
-        console.log('✅ Botão configurado com múltiplos eventos!');
-    }
-    
-    function handleClickQRCode(event) {
-        // PARAR TUDO
-        if (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-        }
-        
-        console.log('🎯 EVENTO QR CODE CAPTURADO!');
-        
-        // VALIDAR
-        if (!validarFormularioDoacao()) {
-            return false;
-        }
-        
-        // GERAR QR CODE
-        gerarQRCodeDoacao();
-        
-        // IMPEDIR QUALQUER OUTRO COMPORTAMENTO
-        return false;
-    }
-    
-    function validarFormularioDoacao() {
-        console.log('📋 Validando formulário...');
-        
-        const elementos = {
-            data: document.getElementById('dataNascimento'),
-            instituicao: document.getElementById('instituicao'),
-            tipo: document.getElementById('tipoDoacao')
-        };
-        
-        // Verificar existência
-        for (let [nome, elem] of Object.entries(elementos)) {
-            if (!elem) {
-                console.error(`Elemento ${nome} não encontrado`);
-                alert('Erro no formulário. Campos não encontrados.');
-                return false;
-            }
-        }
-        
-        // Verificar preenchimento
-        if (!elementos.data.value || !elementos.instituicao.value || !elementos.tipo.value) {
-            alert('❌ Por favor, preencha todos os campos obrigatórios (*)');
-            return false;
-        }
-        
-        // Validar idade
-        const dataNasc = new Date(elementos.data.value);
-        const hoje = new Date();
-        let idade = hoje.getFullYear() - dataNasc.getFullYear();
-        
-        if (hoje.getMonth() < dataNasc.getMonth() || 
-            (hoje.getMonth() === dataNasc.getMonth() && hoje.getDate() < dataNasc.getDate())) {
-            idade--;
-        }
-        
-        if (idade < 18) {
-            alert('❌ Para doar é necessário ter 18 anos ou mais.');
-            return false;
-        }
-        
-        return true;
-    }
-    
-  // ===== SISTEMA INTEGRADO DE DOAÇÃO =====
-
-// Mapeamento dos tipos de doação
-const tiposDoacao = {
-    'dinheiro': {
-        texto: 'Gerar QR Code PIX',
-        icone: 'fa-qrcode',
-        cor: '#008080',
-        acao: 'gerarQRCodeDoacao' // ⬅️ Agora chama a função existente
-    },
-    'alimentos': {
-        texto: 'Doar Alimentos',
-        icone: 'fa-apple-alt',
-        cor: '#28a745',
-        acao: 'processarDoacaoItem'
-    },
-    'roupas': {
-        texto: 'Doar Roupas',
-        icone: 'fa-tshirt',
-        cor: '#17a2b8',
-        acao: 'processarDoacaoItem'
-    },
-    'brinquedos': {
-        texto: 'Doar Brinquedos',
-        icone: 'fa-gamepad',
-        cor: '#ffc107',
-        acao: 'processarDoacaoItem'
-    },
-    
-};
-
-// Sistema principal
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        console.log('🚀 Inicializando sistema integrado de doação...');
-        inicializarSistemaIntegrado();
-    }, 1500);
-});
-
-function inicializarSistemaIntegrado() {
-    const tipoSelect = document.getElementById('tipoDoacao');
-    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!tipoSelect || !botao) {
-        console.error('Elementos não encontrados');
-        return;
-    }
-    
-    // Configurar eventos
-    tipoSelect.addEventListener('change', function() {
-        atualizarBotaoDoacao(this.value);
-    });
-    
-    botao.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        const tipoSelecionado = tipoSelect.value;
-        
-        if (!tipoSelecionado) {
-            alert('❌ Selecione um tipo de doação primeiro.');
-            return;
-        }
-        
-        if (!validarFormularioDoacao()) {
-            return;
-        }
-        
-        // Chamar função baseada no tipo
-        if (tipoSelecionado === 'dinheiro') {
-            gerarQRCodeDoacao(); // ⬅️ Chama a função EXISTENTE
-        } else {
-            processarDoacaoItem(tipoSelecionado);
-        }
-    });
-    
-    // Estado inicial
-    atualizarBotaoDoacao('');
-}
-
-function atualizarBotaoDoacao(tipo) {
-    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!botao) return;
-    
-    if (!tipo) {
-        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
-        botao.style.background = '#6c757d';
-        botao.disabled = true;
-        return;
-    }
-    
-    const config = tiposDoacao[tipo];
-    
-    if (!config) return;
-    
-    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
-    botao.style.background = config.cor;
-    botao.disabled = false;
-}
-
-function processarDoacaoItem(tipo) {
-    const instituicaoSelect = document.getElementById('instituicao');
-    const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
-    
-        const mensagem = `Obrigado pela sua doação, ${nome}! Sua contribuição fará a diferença.`;
-        
-        alert(mensagem);
-        
-        // Fechar modal após sucesso
-        setTimeout(() => {
-            const modal = document.getElementById('donationModal');
-            if (modal) {
-                modal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-            
-            // Resetar
-            const form = document.getElementById('formDoacao');
-            if (form) {
-                form.reset();
-                atualizarBotaoDoacao('');
-            }
-        }, 3000);
-}
-
-
-    function gerarQRCodeDoacao() {
-        console.log('🎨 Gerando QR Code de doação...');
-        
-        if (typeof QRCode === 'undefined') {
-            alert('❌ Biblioteca QRCode não carregada!');
-            return;
-        }
-        
-        try {
-            // Obter dados
-            const instituicaoSelect = document.getElementById('instituicao');
-            const tipoSelect = document.getElementById('tipoDoacao');
-            
-            // VERIFICAR se é doação em dinheiro
-            if (!tipoSelect || tipoSelect.value !== 'dinheiro') {
-                alert('⚠️ Esta função só está disponível para doações em dinheiro.');
-                return;
-            }
-            
-            const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
-            
-            // Container do QR Code
-            let container = document.querySelector('.qr-image-container');
-            
-            if (!container) {
-                container = document.createElement('div');
-                container.className = 'qr-image-container';
-                container.style.cssText = 'margin: 20px auto; text-align: center;';
+        // 2. Atualizar cards
+        const cards = document.querySelectorAll('.help-card');
+        cards.forEach((card, index) => {
+            if (instituicoes[index]) {
+                const inst = instituicoes[index];
                 
-                const qrContainer = document.getElementById('qrContainer');
-                if (qrContainer) {
-                    const header = qrContainer.querySelector('.qr-header');
-                    if (header) header.after(container);
+                const img = card.querySelector('.help-image img');
+                if (img && inst.imagem && !img.src.includes('http')) {
+                    const testImg = new Image();
+                    testImg.onerror = function() {
+                        img.src = inst.imagem;
+                        img.alt = inst.nome;
+                    };
+                    testImg.src = img.src;
+                }
+                
+                // Atualizar texto
+                const title = card.querySelector('.help-overlay h3');
+                if (title) title.textContent = inst.nome;
+                
+                const desc = card.querySelector('.help-overlay p');
+                if (desc) {
+                    desc.textContent = inst.descricao.length > 100 
+                        ? inst.descricao.substring(0, 100) + '...' 
+                        : inst.descricao;
+                }
+                
+                // Configurar clique
+                card.dataset.instituicaoId = inst.id;
+                card.onclick = (e) => {
+                    e.preventDefault();
+                    abrirDetalhesInstituicao(inst.id, inst);
+                };
+            }
+        });
+    }
+
+    // ===== PREENCHER AUTOMATICAMENTE FORMULÁRIO =====
+    function preencherFormularioDoacao() {
+        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
+
+        if (usuarioLogado && usuarioLogado.nome) {
+            try {
+                const nomeCompleto = usuarioLogado.nome.split(' ');
+                const nome = nomeCompleto[0];
+                const sobrenome = nomeCompleto.slice(1).join(' ');
+
+                const nomeInput = document.getElementById('nome');
+                const sobrenomeInput = document.getElementById('sobrenome');
+                const emailInput = document.getElementById('email');
+
+                if (nomeInput) nomeInput.value = nome || '';
+                if (sobrenomeInput) sobrenomeInput.value = sobrenome || '';
+                if (emailInput && usuarioLogado.email) {
+                    emailInput.value = usuarioLogado.email;
+                }
+
+                log('Formulário preenchido automaticamente');
+            } catch (error) {
+                console.error('Erro ao preencher formulário:', error);
+            }
+        }
+    }
+
+    // ===== REGISTRAR DOAÇÃO =====
+    async function registrarDoacaoBackend(dadosDoacao) {
+        try {
+            const usuario = JSON.parse(localStorage.getItem('usuarioLogado'));
+
+            if (!usuario) {
+                return {
+                    status: 'error',
+                    message: 'Faça login para registrar sua doação'
+                };
+            }
+
+            // Tentar backend primeiro
+            const conexaoOk = await testarConexaoBackend();
+            if (conexaoOk) {
+                dadosDoacao.usuario_id = usuario.id || 0;
+
+                const response = await fetch(`${API_URL}/doacoes.php`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosDoacao)
+                });
+
+                const text = await response.text();
+                if (text) {
+                    try {
+                        const data = JSON.parse(text);
+                        return data;
+                    } catch (e) {
+                        console.error('Resposta não é JSON:', text.substring(0, 200));
+                    }
                 }
             }
-            
-            // Limpar e gerar QR Code com texto CURTO
-            container.innerHTML = '';
-            
-            // Texto SUPER CURTO para evitar erro "overflow"
-            const textoQR = `DOA:${nomeInstituicao.substring(0, 3).toUpperCase()}:10.00`;
-            
-            new QRCode(container, {
-                text: textoQR,
-                width: 250,
-                height: 250,
-                colorDark: "#008080",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            
 
-            // Mensagem de sucesso
-            setTimeout(() => {
-                alert(`✅ QR Code gerado com sucesso!`);
-            }, 300);
-            
+            // Se falhar, salvar localmente
+            const doacoes = JSON.parse(localStorage.getItem('doacoes')) || [];
+            const novaDoacao = {
+                id: Date.now(),
+                usuario_id: usuario.id || 0,
+                usuario_nome: usuario.nome,
+                ...dadosDoacao,
+                data_doacao: new Date().toISOString(),
+                status: 'pendente'
+            };
+
+            doacoes.push(novaDoacao);
+            localStorage.setItem('doacoes', JSON.stringify(doacoes));
+
+            return {
+                status: 'success',
+                message: 'Doação registrada localmente (servidor offline)',
+                data: novaDoacao
+            };
+
         } catch (error) {
-            console.error('❌ Erro:', error);
-            alert('Erro: ' + error.message);
+            console.error('Erro ao registrar doação:', error);
+            return {
+                status: 'error',
+                message: 'Erro ao registrar doação. Tente novamente.'
+            };
         }
     }
-    
-    // Função para criar texto SIMPLIFICADO para QR Code
-    function criarTextoQRSimplificado(nomeInstituicao) {
-        // Para PIX, precisamos de um formato específico
-        // Vamos usar um texto BEM CURTO
-        
-        // Opção 1: Apenas dados essenciais
-        const textoCurto = `PIX:ABRACOSOLIDARIO\nINST:${nomeInstituicao.substring(0, 20)}\nVAL:10.00`;
-        
-        // Opção 2: Apenas um link ou código simples
-        // const textoCurto = `DOACAO:${nomeInstituicao.substring(0, 15)}:10.00`;
-        
-        // Opção 3: Código mínimo
-        // const textoCurto = `D:${nomeInstituicao.charAt(0)}:10`;
-        
-        console.log('Texto simplificado criado:', textoCurto);
-        return textoCurto;
-    }
-    
-    // Função de EMERGÊNCIA para QR Code ULTRA SIMPLES
-    function gerarQRCodeUltraSimples() {
-        console.log('🚨 Gerando QR Code ULTRA SIMPLES...');
-        
-        const container = document.querySelector('.qr-image-container');
-        if (!container) return;
-        
-        container.innerHTML = '';
-        
-        // Texto MINIMALISTA
-        const textoMinimo = "DOACAO:10.00"; // Apenas 12 caracteres!
-        
+
+    // ===== FUNÇÕES DO MODAL DE DETALHES =====
+    async function abrirDetalhesInstituicao(instId, instData = null) {
         try {
-            new QRCode(container, {
-                text: textoMinimo,
-                width: 250,
-                height: 250,
-                colorDark: "#008080",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.L // ⬅️ Nível mais baixo (mais caracteres permitidos)
-            });
-            
-            console.log('✅ QR Code ultra simples gerado!');
-            alert('✅ QR Code gerado (versão simplificada)!');
-            
-        } catch (error) {
-            console.error('❌ ERRO CRÍTICO:', error);
-            alert('❌ Não foi possível gerar QR Code. O texto é muito longo.');
-        }
-    }
-    
-    function criarContainerQRCode() {
-        const container = document.createElement('div');
-        container.className = 'qr-image-container';
-        container.style.cssText = `
-            width: 250px;
-            height: 250px;
-            margin: 20px auto;
-            padding: 10px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            text-align: center;
-        `;
-        
-        // Inserir no local correto
-        const qrContainer = document.getElementById('qrContainer');
-        if (qrContainer) {
-            const qrHeader = qrContainer.querySelector('.qr-header');
-            if (qrHeader) {
-                qrHeader.after(container);
-            } else {
-                qrContainer.prepend(container);
+            let instituicao = instData;
+
+            if (!instituicao) {
+                // Buscar do localStorage
+                const instituicoes = JSON.parse(localStorage.getItem('instituicoes')) || [];
+                instituicao = instituicoes.find(inst => inst.id == instId);
+
+                if (!instituicao) {
+                    alert('Instituição não encontrada');
+                    return;
+                }
             }
+
+            // Preencher modal
+            const detailModal = document.getElementById('institutionDetailModal');
+            if (!detailModal) return;
+
+            document.getElementById('detailInstitutionName').textContent = instituicao.nome;
+            document.getElementById('detailInstitutionTitle').textContent = instituicao.nome;
+            document.getElementById('detailInstitutionDescription').textContent = instituicao.descricao;
+
+            const imgElement = document.getElementById('detailInstitutionImage');
+            if (imgElement && instituicao.imagem) {
+                imgElement.src = instituicao.imagem;
+                imgElement.alt = instituicao.nome;
+            }
+
+            document.getElementById('detailInstitutionAddress').textContent = instituicao.endereco || 'Endereço não informado';
+            document.getElementById('detailInstitutionHours').textContent = instituicao.horario_funcionamento || 'Horário não informado';
+
+            const needsList = document.getElementById('needsList');
+            if (needsList && instituicao.itens_necessarios) {
+                const itens = instituicao.itens_necessarios.split(',').map(item => item.trim());
+                needsList.innerHTML = itens.map(item =>
+                    `<div class="need-item"><i class="fas fa-check"></i> ${item}</div>`
+                ).join('');
+            }
+
+            // Botão de doar
+            const donateBtn = document.getElementById('donateToInstitutionBtn');
+            if (donateBtn) {
+                donateBtn.onclick = () => {
+                    fecharDetalhes();
+                    setTimeout(() => {
+                        openDonationModalWithInstitution(instituicao.id);
+                    }, 300);
+                };
+            }
+
+            // Abrir modal
+            detailModal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+
+        } catch (error) {
+            console.error('Erro ao abrir detalhes:', error);
+            alert('Erro ao carregar detalhes da instituição');
         }
-        
-        return container;
     }
-    
-    function mostrarSecaoQRCode(instituicao) {
-        const qrContainer = document.getElementById('qrContainer');
-        
-        if (!qrContainer) {
-            console.error('Seção QR não encontrada!');
-            return;
-        }
-        
-        // Mostrar
-        qrContainer.classList.remove('qr-hidden');
-        qrContainer.classList.add('qr-visible');
-        
-        // Atualizar título
-        const titulo = qrContainer.querySelector('h3');
-        if (titulo) {
-            titulo.textContent = `QR Code PIX - ${instituicao}`;
-        }
-        
-        // Scroll
-        setTimeout(() => {
-            qrContainer.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-        }, 100);
-    }
-    
-    function criarBotaoManual() {
-        console.log('⚠️ Criando botão manual de emergência...');
-        
-        // Criar botão flutuante
-        const botaoEmergencia = document.createElement('button');
-        botaoEmergencia.textContent = '🎯 GERAR QR CODE (EMERGÊNCIA)';
-        botaoEmergencia.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
-            background: #008080;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,128,128,0.4);
-        `;
-        
-        botaoEmergencia.onclick = function() {
-            alert('Botão de emergência funcionando!');
-            gerarQRCodeDoacao();
-        };
-        
-        document.body.appendChild(botaoEmergencia);
-        
-        console.log('✅ Botão de emergência criado!');
-    }
-    
-})();
 
-// ===== SISTEMA DE BOTÃO DINÂMICO =====
-
-// Mapeamento dos tipos de doação para textos e ícones
-const tiposDoacao = {
-    'dinheiro': {
-        texto: 'Gerar QR Code PIX',
-        icone: 'fa-qrcode',
-        cor: '#008080',
-        acao: 'gerarQRCode'
-    },
-    'alimentos': {
-        texto: 'Doar Alimentos',
-        icone: 'fa-apple-alt',
-        cor: '#28a745',
-        acao: 'processarDoacaoItem'
-    },
-    'roupas': {
-        texto: 'Doar Roupas',
-        icone: 'fa-tshirt',
-        cor: '#17a2b8',
-        acao: 'processarDoacaoItem'
-    },
-    'brinquedos': {
-        texto: 'Doar Brinquedos',
-        icone: 'fa-gamepad',
-        cor: '#ffc107',
-        acao: 'processarDoacaoItem'
-    }
-};
-
-// Inicializar quando a página carregar
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(inicializarSistemaDoacao, 1000);
-});
-
-function inicializarSistemaDoacao() {
-    console.log('⚙️ Inicializando sistema de doação dinâmica...');
-    
-    const tipoSelect = document.getElementById('tipoDoacao');
-    const botaoDoacao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!tipoSelect || !botaoDoacao) {
-        console.error('Elementos não encontrados!');
-        return;
-    }
-    
-    // 1. Configurar evento no select
-    tipoSelect.addEventListener('change', function() {
-        atualizarBotaoDoacao(this.value);
-        verificarExibicaoQRCode(this.value);
-    });
-    
-    // 2. Configurar clique no botão
-    botaoDoacao.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        const tipoSelecionado = tipoSelect.value;
-        
-        if (!tipoSelecionado) {
-            alert('❌ Por favor, selecione um tipo de doação primeiro.');
-            return;
-        }
-        
-        // Validar formulário primeiro
-        if (!validarFormularioDoacao()) {
-            return;
-        }
-        
-        // Executar ação baseada no tipo
-        executarAcaoDoacao(tipoSelecionado);
-
-        
-        
-    });
-    
-    // 3. Estado inicial
-    atualizarBotaoDoacao('');
-    
-    console.log('✅ Sistema de doação dinâmica configurado!');
-}
-
-// Função para atualizar o botão conforme o tipo selecionado
-function atualizarBotaoDoacao(tipo) {
-    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!botao) return;
-    
-    if (!tipo) {
-        // Nenhum tipo selecionado
-        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
-        botao.style.background = '#6c757d';
-        botao.disabled = true;
-        botao.style.opacity = '0.7';
-        botao.style.cursor = 'not-allowed';
-        return;
-    }
-    
-    const config = tiposDoacao[tipo];
-    
-    if (!config) {
-        console.error('Tipo não reconhecido:', tipo);
-        return;
-    }
-    
-    // Atualizar botão
-    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
-    botao.style.background = config.cor;
-    botao.disabled = false;
-    botao.style.opacity = '1';
-    botao.style.cursor = 'pointer';
-    
-    // Adicionar efeito de transição
-    botao.style.transition = 'all 0.3s ease';
-    
-    console.log(`✅ Botão atualizado para: ${config.texto}`);
-}
-
-// Função para verificar se deve mostrar QR Code
-function verificarExibicaoQRCode(tipo) {
-    const qrSection = document.getElementById('qrContainer');
-    
-    if (!qrSection) return;
-    
-    if (tipo === 'dinheiro') {
-        // Para dinheiro, apenas esconder se estiver visível
-        // O QR Code será gerado ao clicar no botão
-        console.log('💰 Doação em dinheiro selecionada');
-    } else {
-        // Para outros tipos, garantir que QR Code esteja escondido
-        qrSection.classList.add('qr-hidden');
-        qrSection.classList.remove('qr-visible');
-        console.log(`📦 Doação de ${tipo} selecionada - QR Code escondido`);
-    }
-}
-
-// Função para executar a ação baseada no tipo
-function executarAcaoDoacao(tipo) {
-    const config = tiposDoacao[tipo];
-    
-    if (!config) {
-        alert('Tipo de doação não reconhecido.');
-        return;
-    }
-    
-    console.log(`🎯 Executando ação: ${config.acao} para ${tipo}`);
-    
-    switch(config.acao) {
-        case 'gerarQRCode':
-            gerarQRCodeDoacao();
-            break;
-            
-        case 'processarDoacaoItem':
-            processarDoacaoItem(tipo);
-            break;
-            
-        default:
-            alert('Ação não configurada para este tipo de doação.');
-    }
-}
-
-// Função para processar doação de itens
-function processarDoacaoItem(tipoItem) {
-    const instituicaoSelect = document.getElementById('instituicao');
-    const motivacaoTextarea = document.getElementById('motivacao');
-    
-    if (!instituicaoSelect) {
-        alert('Erro: Instituição não selecionada.');
-        return;
-    }
-    
-    const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
-    const motivacao = motivacaoTextarea ? motivacaoTextarea.value : '';
-    
-    // Mapear tipo para texto amigável
-    const tiposTexto = {
-        'alimentos': 'alimentos',
-        'roupas': 'roupas',
-        'brinquedos': 'brinquedos'
-    };
-    
-    const tipoTexto = tiposTexto[tipoItem] || 'itens';
-    
-    
-    // Registrar a doação no localStorage (opcional)
-    registrarDoacaoItem(tipoItem, nomeInstituicao, motivacao);
-    
-    // Fechar o modal após alguns segundos
-    setTimeout(() => {
-        const modal = document.getElementById('donationModal');
+    function fecharDetalhes() {
+        const modal = document.getElementById('institutionDetailModal');
         if (modal) {
             modal.style.display = 'none';
             document.body.style.overflow = 'auto';
         }
-        
-        // Resetar formulário
-        const form = document.getElementById('formDoacao');
-        if (form) {
-            form.reset();
-            atualizarBotaoDoacao('');
-        }
-    }, 5000);
-}
+    }
 
-// Função para registrar doação de item
-function registrarDoacaoItem(tipo, instituicao, motivacao) {
-    try {
-        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
-        
-        const doacao = {
-            tipo: 'item',
-            item: tipo,
-            instituicao: instituicao,
-            usuario: usuarioLogado ? usuarioLogado.nome : 'Visitante',
-            motivacao: motivacao,
-            data: new Date().toLocaleString('pt-BR'),
-            status: 'pendente'
-        };
-        
-        console.log('📝 Doação de item registrada:', doacao);
-        
-        // Salvar no localStorage
-        const doacoes = JSON.parse(localStorage.getItem('doacoes')) || [];
-        doacoes.push(doacao);
-        localStorage.setItem('doacoes', JSON.stringify(doacoes));
-        
-    } catch (error) {
-        console.error('Erro ao registrar doação:', error);
-    }
-}
-
-// Atualizar a função de validar formulário
-function validarFormularioDoacao() {
-    console.log('📋 Validando formulário...');
-    
-    const dataInput = document.getElementById('dataNascimento');
-    const instituicaoSelect = document.getElementById('instituicao');
-    const tipoSelect = document.getElementById('tipoDoacao');
-    
-    // Verificar existência
-    if (!dataInput || !instituicaoSelect || !tipoSelect) {
-        alert('Erro no formulário. Recarregue a página.');
-        return false;
-    }
-    
-    // Verificar preenchimento
-    if (!dataInput.value || !instituicaoSelect.value || !tipoSelect.value) {
-        alert('❌ Por favor, preencha todos os campos obrigatórios (*)');
-        return false;
-    }
-    
-    // Validar idade (18+)
-    const dataNasc = new Date(dataInput.value);
-    const hoje = new Date();
-    let idade = hoje.getFullYear() - dataNasc.getFullYear();
-    
-    if (hoje.getMonth() < dataNasc.getMonth() || 
-        (hoje.getMonth() === dataNasc.getMonth() && hoje.getDate() < dataNasc.getDate())) {
-        idade--;
-    }
-    
-    if (idade < 18) {
-        alert('❌ Para doar é necessário ter 18 anos ou mais.');
-        return false;
-    }
-    
-    return true;
-}
-// Função para adicionar classe de cor ao botão
-function adicionarClasseCorBotao(tipo) {
-    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!botao) return;
-    
-    // Remover todas as classes de cor
-    botao.classList.remove('botao-dinheiro', 'botao-alimentos', 'botao-roupas', 'botao-brinquedos');
-    
-    // Adicionar classe específica
-    switch(tipo) {
-        case 'dinheiro':
-            botao.classList.add('botao-dinheiro');
-            break;
-        case 'alimentos':
-            botao.classList.add('botao-alimentos');
-            break;
-        case 'roupas':
-            botao.classList.add('botao-roupas');
-            break;
-        case 'brinquedos':
-            botao.classList.add('botao-brinquedos');
-            break;
-    }
-}
-
-// Atualize a função atualizarBotaoDoacao para incluir isso:
-function atualizarBotaoDoacao(tipo) {
-    const botao = document.getElementById('botaoDoacao') || document.getElementById('gerarQR');
-    
-    if (!botao) return;
-    
-    if (!tipo) {
-        // Estado neutro
-        botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
-        botao.style.background = '#6c757d';
-        botao.disabled = true;
-        botao.classList.remove('botao-dinheiro', 'botao-alimentos', 'botao-roupas', 'botao-brinquedos');
-        return;
-    }
-    
-    const config = tiposDoacao[tipo];
-    
-    if (!config) return;
-    
-    // Atualizar conteúdo
-    botao.innerHTML = `<i class="fas ${config.icone}"></i> ${config.texto}`;
-    botao.disabled = false;
-    
-    // Adicionar classe de cor
-    adicionarClasseCorBotao(tipo);
-    
-    console.log(`✅ Botão atualizado para: ${config.texto}`);
-}
-
-// Adicione esta função para diagnóstico
-function verificarConexoesQR() {
-    console.log('🔍 Verificando conexões do sistema QR...');
-    
-    const elementos = {
-        tipoSelect: document.getElementById('tipoDoacao'),
-        botao: document.getElementById('botaoDoacao') || document.getElementById('gerarQR'),
-        qrContainer: document.getElementById('qrContainer'),
-        imageContainer: document.querySelector('.qr-image-container'),
-        instituicaoSelect: document.getElementById('instituicao')
-    };
-    
-    Object.entries(elementos).forEach(([nome, elem]) => {
-        console.log(`${nome}:`, elem ? '✅ ENCONTRADO' : '❌ NÃO ENCONTRADO');
-    });
-    
-    // Testar se a função gerarQRCodeDoacao é chamada
-    console.log('gerarQRCodeDoacao é função?', typeof gerarQRCodeDoacao === 'function');
-    
-    // Testar clique manual
-    if (elementos.botao) {
-        console.log('ID do botão:', elementos.botao.id);
-        console.log('HTML do botão:', elementos.botao.outerHTML.substring(0, 100) + '...');
-    }
-}
-
-// Execute no Console para diagnóstico
-verificarConexoesQR();
-
-// ===== SISTEMA DE QR CODE - VERSÃO FINAL FUNCIONAL =====
-
-// Garantir que as funções existam
-if (typeof gerarQRCodeDoacao === 'undefined') {
-    window.gerarQRCodeDoacao = function() {
-        console.log('🎨 GERANDO QR CODE (função de emergência)...');
-        
-        if (typeof QRCode === 'undefined') {
-            alert('❌ Biblioteca QRCode não carregada!');
-            return;
-        }
-        
+    function openDonationModalWithInstitution(instituicaoId) {
         try {
-            // Obter dados
-            const instituicaoSelect = document.getElementById('instituicao');
+            const modal = document.getElementById('donationModal');
+            if (modal) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+
+                // Selecionar instituição
+                const instituicaoSelect = document.getElementById('instituicao');
+                if (instituicaoSelect) {
+                    instituicaoSelect.value = instituicaoId;
+                }
+
+                // Preencher automaticamente
+                preencherFormularioDoacao();
+
+                // Configurar sistema de doação
+                setTimeout(() => {
+                    try {
+                        configurarSistemaDoacao();
+                    } catch (error) {
+                        console.error('Erro ao configurar sistema de doação:', error);
+                    }
+                }, 100);
+            }
+        } catch (error) {
+            console.error('Erro ao abrir modal de doação:', error);
+        }
+    }
+
+    // ===== CARROSSEL PRINCIPAL (CORRIGIDO) =====
+    function initCarousel() {
+        try {
+            const carousel = document.querySelector('.carousel');
+            const indicators = document.querySelectorAll('.indicator');
+
+            if (!carousel || indicators.length === 0) return;
+
+            let currentIndex = 0;
+            let autoPlayInterval;
+
+            function updateCarousel() {
+                carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
+
+                indicators.forEach((indicator, index) => {
+                    indicator.classList.toggle('active', index === currentIndex);
+                });
+            }
+
+            function nextSlide() {
+                currentIndex = (currentIndex + 1) % indicators.length;
+                updateCarousel();
+            }
+
+            function startAutoPlay() {
+                if (autoPlayInterval) clearInterval(autoPlayInterval);
+                autoPlayInterval = setInterval(nextSlide, 5000);
+            }
+
+            // Adicionar eventos aos indicadores
+            indicators.forEach(indicator => {
+                indicator.addEventListener('click', function () {
+                    const index = parseInt(this.getAttribute('data-index') || '0');
+                    if (!isNaN(index)) {
+                        currentIndex = index;
+                        updateCarousel();
+                    }
+                });
+            });
+
+            // Iniciar autoplay
+            startAutoPlay();
+
+            // Pausar ao passar o mouse
+            carousel.addEventListener('mouseenter', () => {
+                clearInterval(autoPlayInterval);
+            });
+
+            carousel.addEventListener('mouseleave', startAutoPlay);
+
+        } catch (error) {
+            console.error('Erro ao inicializar carrossel:', error);
+        }
+    }
+
+    // ===== MENU MOBILE =====
+    function initMobileMenu() {
+        try {
+            const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+            const mobileMenu = document.querySelector('.mobile-menu');
+
+            if (!mobileMenuBtn || !mobileMenu) return;
+
+            mobileMenuBtn.addEventListener('click', function () {
+                mobileMenu.classList.toggle('active');
+            });
+
+            // Fechar menu ao clicar em um item
+            mobileMenu.querySelectorAll('.mobile-nav-item').forEach(item => {
+                item.addEventListener('click', function () {
+                    mobileMenu.classList.remove('active');
+                });
+            });
+
+        } catch (error) {
+            console.error('Erro ao inicializar menu mobile:', error);
+        }
+    }
+
+    // ===== SMOOTH SCROLL (CORRIGIDO - EVITAR ERRO COM '#') =====
+    function initSmoothScroll() {
+        try {
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    const href = this.getAttribute('href');
+
+                    // Ignorar links vazios ou apenas '#'
+                    if (!href || href === '#' || href === '#!') {
+                        e.preventDefault();
+                        return;
+                    }
+
+                    const target = document.querySelector(href);
+                    if (target) {
+                        e.preventDefault();
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('Erro no smooth scroll:', error);
+        }
+    }
+
+    // ===== CARROSSEL DE AJUDA =====
+    function initHelpCarousel() {
+        try {
+            const helpCarousel = document.querySelector('.help-cards-carousel');
+            const helpCards = document.querySelectorAll('.help-card');
+            const prevArrow = document.querySelector('.carousel-arrow-prev');
+            const nextArrow = document.querySelector('.carousel-arrow-next');
+
+            if (!helpCarousel || !prevArrow || !nextArrow) return;
+
+            let currentHelpIndex = 0;
+
+            function getCardsPerView() {
+                if (window.innerWidth <= 768) return 1;
+                if (window.innerWidth <= 1024) return 2;
+                return 3;
+            }
+
+            function updateHelpCarousel() {
+                const cardsPerView = getCardsPerView();
+                const cardWidth = helpCards[0]?.offsetWidth || 300;
+                const gap = 30;
+                const translateX = currentHelpIndex * (cardWidth + gap);
+
+                helpCarousel.style.transform = `translateX(-${translateX}px)`;
+            }
+
+            function showNextCards() {
+                const cardsPerView = getCardsPerView();
+                const maxIndex = Math.max(0, helpCards.length - cardsPerView);
+
+                if (currentHelpIndex < maxIndex) {
+                    currentHelpIndex++;
+                    updateHelpCarousel();
+                }
+            }
+
+            function showPrevCards() {
+                if (currentHelpIndex > 0) {
+                    currentHelpIndex--;
+                    updateHelpCarousel();
+                }
+            }
+
+            // Event listeners
+            nextArrow.addEventListener('click', showNextCards);
+            prevArrow.addEventListener('click', showPrevCards);
+
+            // Atualizar na redimensionamento
+            window.addEventListener('resize', updateHelpCarousel);
+
+            // Inicializar
+            updateHelpCarousel();
+
+        } catch (error) {
+            console.error('Erro no carrossel de ajuda:', error);
+        }
+    }
+
+    // ===== MODAL DE LOGIN =====
+    function initLoginModal() {
+        try {
+            const loginModal = document.getElementById('loginModal');
+            const loginFormModal = document.querySelector('#loginModal form');
+
+            if (!loginModal || !loginFormModal) return;
+
+            // Abrir modal de login
+            const loginBtns = document.querySelectorAll('.login-btn, .mobile-login-btn');
+            loginBtns.forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    loginModal.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                });
+            });
+
+            // Fechar modal de login
+            const closeLoginBtn = document.querySelector('.close-login-modal');
+            if (closeLoginBtn) {
+                closeLoginBtn.addEventListener('click', function () {
+                    loginModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                });
+            }
+
+            // Fechar modal clicando fora
+            window.addEventListener('click', function (event) {
+                if (event.target === loginModal) {
+                    loginModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            });
+
+            // Envio do formulário de login
+            loginFormModal.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const email = document.getElementById('login-email')?.value || '';
+                const password = document.getElementById('login-password')?.value || '';
+
+                if (!email || !password) {
+                    alert('Por favor, preencha todos os campos.');
+                    return;
+                }
+
+                const resultado = await fazerLogin(email, password);
+
+                if (resultado.success) {
+                    alert(`Bem-vindo(a), ${resultado.nome}!`);
+                    loginModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                    loginFormModal.reset();
+                } else {
+                    alert(resultado.message || 'E-mail ou senha incorretos!');
+                }
+            });
+
+            // Links do login
+            const forgotPasswordLink = document.querySelector('.forgot-password-link');
+            const createAccountLink = document.querySelector('.create-account-link');
+
+            if (forgotPasswordLink) {
+                forgotPasswordLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+                    if (forgotPasswordModal) {
+                        loginModal.style.display = 'none';
+                        forgotPasswordModal.style.display = 'block';
+                    }
+                });
+            }
+
+            if (createAccountLink) {
+                createAccountLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const createAccountModal = document.getElementById('createAccountModal');
+                    if (createAccountModal) {
+                        loginModal.style.display = 'none';
+                        createAccountModal.style.display = 'block';
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('Erro no modal de login:', error);
+        }
+    }
+
+    // ===== MODAL DE CRIAR CONTA =====
+    function initCreateAccountModal() {
+        try {
+            const createAccountModal = document.getElementById('createAccountModal');
+            const createAccountForm = document.getElementById('createAccountForm');
+
+            if (!createAccountModal || !createAccountForm) return;
+
+            // Elementos de validação
+            const passwordInput = document.getElementById('create-password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            const strengthBar = document.querySelector('.strength-bar');
+            const strengthText = document.querySelector('.strength-text');
+            const passwordMatchDiv = document.querySelector('.password-match');
+            const birthdateInput = document.getElementById('birthdate');
+            const validationMessage = document.getElementById('validationMessage');
+
+            // Validação de senha
+            if (passwordInput) {
+                passwordInput.addEventListener('input', function () {
+                    const password = this.value;
+                    let score = 0;
+                    let strength = 'fraca';
+
+                    if (password.length >= 8) score++;
+                    if (/[A-Z]/.test(password)) score++;
+                    if (/[a-z]/.test(password)) score++;
+                    if (/[0-9]/.test(password)) score++;
+                    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+                    if (score === 5) strength = 'forte';
+                    else if (score >= 3) strength = 'média';
+
+                    if (strengthBar) {
+                        strengthBar.style.width = (score * 20) + '%';
+                        strengthBar.style.backgroundColor =
+                            strength === 'fraca' ? '#dc3545' :
+                                strength === 'média' ? '#ffc107' : '#28a745';
+                    }
+
+                    if (strengthText) {
+                        strengthText.textContent = `Força: ${strength}`;
+                        strengthText.style.color =
+                            strength === 'fraca' ? '#dc3545' :
+                                strength === 'média' ? '#ffc107' : '#28a745';
+                    }
+
+                    this.setAttribute('data-strength', strength);
+                });
+            }
+
+            // Confirmação de senha
+            if (confirmPasswordInput && passwordMatchDiv) {
+                confirmPasswordInput.addEventListener('input', function () {
+                    const password = passwordInput?.value || '';
+                    const confirmPassword = this.value;
+
+                    if (!confirmPassword) {
+                        passwordMatchDiv.style.display = 'none';
+                        return;
+                    }
+
+                    passwordMatchDiv.style.display = 'block';
+
+                    if (password === confirmPassword) {
+                        passwordMatchDiv.className = 'password-match match';
+                        passwordMatchDiv.textContent = '✅ Senhas correspondem';
+                        passwordMatchDiv.style.color = '#28a745';
+                    } else {
+                        passwordMatchDiv.className = 'password-match mismatch';
+                        passwordMatchDiv.textContent = '❌ Senhas não correspondem';
+                        passwordMatchDiv.style.color = '#dc3545';
+                    }
+                });
+            }
+
+            // Validação de idade
+            if (birthdateInput && validationMessage) {
+                birthdateInput.addEventListener('change', function () {
+                    const dataNascimento = this.value;
+
+                    if (!dataNascimento) {
+                        validationMessage.style.display = 'none';
+                        return;
+                    }
+
+                    const hoje = new Date();
+                    const nascimento = new Date(dataNascimento);
+                    let idade = hoje.getFullYear() - nascimento.getFullYear();
+                    const mes = hoje.getMonth() - nascimento.getMonth();
+
+                    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+                        idade--;
+                    }
+
+                    validationMessage.style.display = 'block';
+
+                    if (idade >= 18) {
+                        validationMessage.className = 'validation-message valid';
+                        validationMessage.textContent = `✅ Idade válida: ${idade} anos`;
+                        this.classList.add('valid-date');
+                        this.classList.remove('invalid-date');
+                    } else {
+                        validationMessage.className = 'validation-message invalid';
+                        validationMessage.textContent = `❌ Idade insuficiente: ${idade} anos`;
+                        this.classList.add('invalid-date');
+                        this.classList.remove('valid-date');
+                    }
+                });
+            }
+
+            // Fechar modal
+            const closeCreateAccountBtn = document.querySelector('.close-create-account-modal');
+            if (closeCreateAccountBtn) {
+                closeCreateAccountBtn.addEventListener('click', function () {
+                    createAccountModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                });
+            }
+
+            // Voltar para login
+            const backToLoginLinks = document.querySelectorAll('.back-to-login-link');
+            backToLoginLinks.forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    createAccountModal.style.display = 'none';
+                    const loginModal = document.getElementById('loginModal');
+                    if (loginModal) loginModal.style.display = 'block';
+                });
+            });
+
+            // Fechar clicando fora
+            window.addEventListener('click', function (event) {
+                if (event.target === createAccountModal) {
+                    createAccountModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            });
+
+            // Envio do formulário
+            createAccountForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const fullName = document.getElementById('full-name')?.value || '';
+                const email = document.getElementById('create-email')?.value || '';
+                const password = document.getElementById('create-password')?.value || '';
+                const confirmPassword = document.getElementById('confirm-password')?.value || '';
+                const birthdate = document.getElementById('birthdate')?.value || '';
+                const cnpj = document.getElementById('cnpj')?.value || '';
+
+                // Validações
+                if (!fullName || !email || !password || !confirmPassword || !birthdate) {
+                    alert('Preencha todos os campos obrigatórios.');
+                    return;
+                }
+
+                if (password !== confirmPassword) {
+                    alert('As senhas não coincidem.');
+                    return;
+                }
+
+                // Validar idade
+                const hoje = new Date();
+                const nascimento = new Date(birthdate);
+                let idade = hoje.getFullYear() - nascimento.getFullYear();
+                const mes = hoje.getMonth() - nascimento.getMonth();
+
+                if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+                    idade--;
+                }
+
+                if (idade < 18) {
+                    alert('É necessário ter 18 anos ou mais.');
+                    return;
+                }
+
+                // Criar conta
+                const resultado = await criarContaBackend({
+                    nome_completo: fullName,
+                    email: email,
+                    senha: password,
+                    data_nascimento: birthdate,
+                    cnpj: cnpj || null
+                });
+
+                if (resultado.success) {
+                    alert(`Conta criada! Bem-vindo(a), ${fullName.split(' ')[0]}!`);
+                    createAccountModal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                    createAccountForm.reset();
+
+                    // Resetar indicadores
+                    if (strengthBar) strengthBar.style.width = '0%';
+                    if (strengthText) strengthText.textContent = 'Força da senha';
+                    if (passwordMatchDiv) passwordMatchDiv.style.display = 'none';
+                } else {
+                    alert(resultado.message || 'Erro ao criar conta');
+                }
+            });
+
+        } catch (error) {
+            console.error('Erro no modal de criar conta:', error);
+        }
+    }
+
+    // ===== SISTEMA DE DOAÇÃO CORRIGIDO =====
+    function configurarSistemaDoacao() {
+        try {
+            log('Configurando sistema de doação...');
+
             const tipoSelect = document.getElementById('tipoDoacao');
-            
-            if (!instituicaoSelect || !tipoSelect) {
-                alert('Erro: Elementos não encontrados.');
+            const doarBtn = document.getElementById('botaoDoacao');
+            const finalizarBtn = document.getElementById('finalizarDoacaoBtn');
+
+            if (!tipoSelect || !doarBtn) {
+                console.warn('Elementos de doação não encontrados');
                 return;
             }
-            
-            const nomeInstituicao = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
-            
-            // Container do QR Code
-            let container = document.querySelector('.qr-image-container');
-            
-            if (!container) {
-                console.log('📦 Criando container...');
-                container = document.createElement('div');
-                container.className = 'qr-image-container';
-                container.style.cssText = `
-                    width: 250px;
-                    height: 250px;
-                    margin: 20px auto;
-                    background: white;
-                    border-radius: 10px;
-                    padding: 10px;
-                `;
-                
-                const qrContainer = document.getElementById('qrContainer');
-                if (qrContainer) {
-                    const header = qrContainer.querySelector('.qr-header');
-                    if (header) {
-                        header.after(container);
-                    }
-                }
-            }
-            
-            // Limpar e gerar
-            container.innerHTML = '';
-            
-            // Texto CURTO
-            const textoQR = `DOA:${nomeInstituicao.substring(0, 3).toUpperCase()}:10.00`;
-            
-            new QRCode(container, {
-                text: textoQR,
-                width: 250,
-                height: 250,
-                colorDark: "#008080",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            
-            console.log('✅ QR Code gerado!');
-            
-            // CHAMAR FUNÇÃO PARA MOSTRAR
-            if (typeof mostrarSecaoQRCode === 'function') {
-                mostrarSecaoQRCode(nomeInstituicao);
-            } else {
-                // Se a função não existir, mostrar manualmente
-                mostrarQRCodeManual(nomeInstituicao);
-            }
-            
-            setTimeout(() => {
-                alert(`✅ QR Code gerado!\n\nInstituição: ${nomeInstituicao}`);
-            }, 300);
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            alert('Erro: ' + error.message);
-        }
-    };
-    
-    console.log('✅ Função gerarQRCodeDoacao criada (emergência)');
-}
 
-// Função para mostrar QR Code (se a original não existir)
-if (typeof mostrarSecaoQRCode === 'undefined') {
-    window.mostrarSecaoQRCode = function(instituicao) {
-        console.log('👁️ MOSTRANDO QR Code (função de emergência)...');
-        mostrarQRCodeManual(instituicao);
-    };
-}
+            const config = {
+                'dinheiro': { cor: '#008080', emoji: '💰' },
+                'alimentos': { cor: '#28a745', emoji: '🍎' },
+                'ração': { cor: '#28a700', emoji: '🐾' },
+                'roupas': { cor: '#17a2b8', emoji: '👕' },
+                'produtos': { cor: '#6f42c1', emoji: '🧼' },
+                'fraldas': { cor: '#e83e8c', emoji: '👶' },
+                'materiais': { cor: '#fd7e14', emoji: '📚' },
+                'brinquedos': { cor: '#ffc107', emoji: '🧸' },
+                'cobertores': { cor: '#20c997', emoji: '🛏️' }
+            };
 
-// Função manual para mostrar QR Code
-function mostrarQRCodeManual(instituicao) {
-    const qrContainer = document.getElementById('qrContainer');
-    
-    if (!qrContainer) {
-        console.error('❌ Container QR não encontrado!');
-        return;
-    }
-    
-    console.log('🎯 Mostrando QR Code manualmente...');
-    
-    // REMOVER hidden
-    qrContainer.classList.remove('qr-hidden');
-    
-    // ADICIONAR visible
-    qrContainer.classList.add('qr-visible');
-    
-    // FORÇAR estilos
-    qrContainer.style.cssText = `
-        display: block !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        background: white !important;
-        padding: 20px !important;
-        border-radius: 10px !important;
-        margin: 20px 0 !important;
-        border: 2px solid #008080 !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
-    `;
-    
-    // Atualizar título
-    const titulo = qrContainer.querySelector('h3');
-    if (titulo) {
-        titulo.textContent = `QR Code PIX - ${instituicao}`;
-        titulo.style.color = '#008080';
-    }
-    
-    // Scroll
-    setTimeout(() => {
-        qrContainer.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-        });
-    }, 100);
-    
-    console.log('✅ QR Code mostrado!');
-}
-
-// Sistema do botão dinâmico (SE ainda não existir)
-if (!window.sistemaDoacaoInicializado) {
-    setTimeout(() => {
-        console.log('⚙️ Configurando botão dinâmico...');
-        
-        const tipoSelect = document.getElementById('tipoDoacao');
-        const botao = document.getElementById('botaoDoacao');
-        
-        if (tipoSelect && botao) {
-            // Evento de change no select
-            tipoSelect.addEventListener('change', function() {
+            // Quando muda o tipo de doação
+            tipoSelect.addEventListener('change', function () {
                 const tipo = this.value;
-                
-                if (tipo === 'dinheiro') {
-                    botao.innerHTML = '<i class="fas fa-qrcode"></i> Gerar QR Code PIX';
-                    botao.style.background = '#008080';
-                } else if (tipo === 'alimentos') {
-                    botao.innerHTML = '<i class="fas fa-apple-alt"></i> Doar Alimentos';
-                    botao.style.background = '#28a745';
-                } else if (tipo === 'roupas') {
-                    botao.innerHTML = '<i class="fas fa-tshirt"></i> Doar Roupas';
-                    botao.style.background = '#17a2b8';
-                } else if (tipo === 'brinquedos') {
-                    botao.innerHTML = '<i class="fas fa-gamepad"></i> Doar Brinquedos';
-                    botao.style.background = '#ffc107';
-                } else {
-                    botao.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo';
-                    botao.style.background = '#6c757d';
+                const texto = this.options[this.selectedIndex].text;
+
+                if (!tipo) {
+                    doarBtn.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+                    doarBtn.style.background = '#6c757d';
+                    doarBtn.disabled = true;
+                    if (finalizarBtn) finalizarBtn.style.display = 'none';
+                    return;
                 }
-                
-                botao.disabled = !tipo;
+
+                const cfg = config[tipo] || { cor: '#008080', emoji: '🎁' };
+
+                doarBtn.innerHTML = `${cfg.emoji} Doar ${texto}`;
+                doarBtn.style.background = cfg.cor;
+                doarBtn.style.color = 'white';
+                doarBtn.disabled = false;
+
+                if (finalizarBtn) {
+                    finalizarBtn.style.display = tipo === 'dinheiro' ? 'none' : 'flex';
+                }
             });
-            
-            // Evento de clique no botão
-            botao.addEventListener('click', function(e) {
+
+            // Clique no botão DOAR - CORRIGIDO PARA EVITAR DUPLICAÇÃO
+            doarBtn.addEventListener('click', async function (e) {
                 e.preventDefault();
-                
+
+                // Evitar clique duplo
+                if (processandoDoacao) {
+                    console.log('Doação já está sendo processada...');
+                    return;
+                }
+
                 const tipo = tipoSelect.value;
-                
+                const instituicaoSelect = document.getElementById('instituicao');
+                const motivacao = document.getElementById('motivacao')?.value || '';
+
+                if (!instituicaoSelect || !instituicaoSelect.value) {
+                    alert('Selecione uma instituição.');
+                    return;
+                }
+
                 if (!tipo) {
                     alert('Selecione um tipo de doação.');
                     return;
                 }
-                
-                // Validar campos obrigatórios
-                const data = document.getElementById('dataNascimento').value;
-                const instituicao = document.getElementById('instituicao').value;
-                
-                if (!data || !instituicao) {
-                    alert('Preencha todos os campos obrigatórios.');
+
+                const usuario = JSON.parse(localStorage.getItem('usuarioLogado'));
+                if (!usuario) {
+                    alert('Faça login para doar.');
+                    document.getElementById('loginModal').style.display = 'block';
                     return;
                 }
-                
-                // Ação baseada no tipo
-                if (tipo === 'dinheiro') {
-                    // Chamar função de gerar QR Code
-                    if (typeof gerarQRCodeDoacao === 'function') {
-                        gerarQRCodeDoacao();
+
+                // Desabilitar botão enquanto processa
+                processandoDoacao = true;
+                doarBtn.disabled = true;
+                doarBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+                try {
+                    if (tipo === 'dinheiro') {
+                        // Para dinheiro: gera QR Code
+                        await gerarQRCodeDoacaoCompleto();
                     } else {
-                        alert('Erro: Função não disponível.');
+                        // Para itens: mostra confirmação UMA VEZ
+                        const instituicaoNome = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+                        const tipoNome = tipoSelect.options[tipoSelect.selectedIndex].text;
+
+                        // Mostrar modal de confirmação customizado
+                        const confirmar = await mostrarConfirmacaoDoacao(
+                            instituicaoNome,
+                            tipoNome,
+                            motivacao
+                        );
+
+                        if (!confirmar) {
+                            // Usuário cancelou - reabilitar botão
+                            processandoDoacao = false;
+                            doarBtn.disabled = false;
+                            doarBtn.innerHTML = `${config[tipo].emoji} Doar ${tipoNome}`;
+                            return;
+                        }
+
+                        // Registrar doação APENAS UMA VEZ
+                        const resultado = await registrarDoacaoBackend({
+                            instituicao_id: instituicaoSelect.value,
+                            tipo_doacao: tipo,
+                            descricao: `Doação de ${tipoNome}`,
+                            motivacao: motivacao,
+                            valor: null,
+                            usuario_id: usuario.id || 0
+                        });
+
+                        if (resultado.status === 'success') {
+                            // Feedback visual de sucesso
+                            doarBtn.innerHTML = '<i class="fas fa-check"></i> Doação Registrada!';
+                            doarBtn.style.background = '#28a745';
+                            
+                            setTimeout(() => {
+                                alert('✅ Doação registrada com sucesso! Entraremos em contato.');
+                                limparFormularioDoacao();
+                                
+                                setTimeout(() => {
+                                    const modal = document.getElementById('donationModal');
+                                    if (modal) modal.style.display = 'none';
+                                    document.body.style.overflow = 'auto';
+                                }, 500);
+                            }, 300);
+                        } else {
+                            alert('Erro: ' + resultado.message);
+                            // Restaurar botão em caso de erro
+                            processandoDoacao = false;
+                            doarBtn.disabled = false;
+                            doarBtn.innerHTML = `${config[tipo].emoji} Doar ${tipoNome}`;
+                        }
                     }
-                } else {
-                    const tiposTexto = {
-                        'alimentos': 'alimentos',
-                        'roupas': 'roupas', 
-                        'brinquedos': 'brinquedos'
-                    };
-                    
-                    alert(`✅ Doação de ${tiposTexto[tipo]} registrada!`);
+                } catch (error) {
+                    console.error('Erro no processo de doação:', error);
+                    alert('Erro ao processar doação. Tente novamente.');
+                    processandoDoacao = false;
+                    doarBtn.disabled = false;
+                    doarBtn.innerHTML = `${config[tipo].emoji} Doar ${tipoSelect.options[tipoSelect.selectedIndex].text}`;
+                } finally {
+                    // Reabilitar o botão depois de 3 segundos (para evitar clique rápido)
+                    setTimeout(() => {
+                        processandoDoacao = false;
+                    }, 3000);
                 }
             });
-            
-            console.log('✅ Botão dinâmico configurado!');
-            window.sistemaDoacaoInicializado = true;
+
+            // Botão FINALIZAR - Só fecha o modal
+            if (finalizarBtn) {
+                finalizarBtn.addEventListener('click', function () {
+                    const confirmar = confirm('Deseja fechar o formulário de doação?');
+                    if (confirmar) {
+                        const modal = document.getElementById('donationModal');
+                        if (modal) modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                });
+            }
+
+            // Estado inicial
+            doarBtn.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+            doarBtn.style.background = '#6c757d';
+            doarBtn.disabled = true;
+            if (finalizarBtn) finalizarBtn.style.display = 'none';
+
+        } catch (error) {
+            console.error('Erro ao configurar sistema de doação:', error);
         }
-    }, 1000);
-}
+    }
+
+    // ===== FUNÇÃO AUXILIAR: CONFIRMAÇÃO DE DOAÇÃO =====
+    function mostrarConfirmacaoDoacao(instituicaoNome, tipoNome, motivacao) {
+        return new Promise((resolve) => {
+            const modalId = 'confirmacaoDoacaoModal';
+            
+            // Remover modal existente se houver
+            const modalExistente = document.getElementById(modalId);
+            if (modalExistente) {
+                document.body.removeChild(modalExistente);
+            }
+            
+            // Criar modal de confirmação dinâmico
+            const modal = document.createElement('div');
+            modal.id = modalId;
+            modal.innerHTML = `
+                <div class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+                    <div class="modal-content" style="background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 90%; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
+                        <h3 style="color: #008080; margin-bottom: 20px;">Confirmar Doação</h3>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <p><strong>🏢 Instituição:</strong> ${instituicaoNome}</p>
+                            <p><strong>🎁 Tipo de Doação:</strong> ${tipoNome}</p>
+                            ${motivacao ? `<p><strong>💭 Motivação:</strong> ${motivacao.substring(0, 100)}${motivacao.length > 100 ? '...' : ''}</p>` : ''}
+                        </div>
+                        
+                        <div style="color: #666; font-size: 14px; margin-bottom: 25px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                            <i class="fas fa-info-circle"></i> Clique apenas UMA vez em "Confirmar"
+                        </div>
+                        
+                        <div style="display: flex; gap: 15px; justify-content: flex-end;">
+                            <button id="cancelarDoacaoBtn" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                Cancelar
+                            </button>
+                            <button id="confirmarDoacaoBtn" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                                <i class="fas fa-check"></i> Confirmar Doação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Configurar botões
+            setTimeout(() => {
+                document.getElementById('cancelarDoacaoBtn').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                    resolve(false);
+                });
+                
+                document.getElementById('confirmarDoacaoBtn').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                    resolve(true);
+                });
+            }, 100);
+        });
+    }
+
+    // ===== GERAR QR CODE COMPLETO =====
+    async function gerarQRCodeDoacaoCompleto() {
+        try {
+            const instituicaoSelect = document.getElementById('instituicao');
+            const usuario = JSON.parse(localStorage.getItem('usuarioLogado'));
+            
+            if (!instituicaoSelect || !instituicaoSelect.value) {
+                alert('Selecione uma instituição primeiro.');
+                return;
+            }
+            
+            const instituicaoId = instituicaoSelect.value;
+            const instituicaoNome = instituicaoSelect.options[instituicaoSelect.selectedIndex].text;
+            
+            console.log('Gerando QR Code para:', { instituicaoId, instituicaoNome });
+            
+            const container = document.querySelector('.qr-image-container');
+            if (!container) {
+                console.error('Container do QR Code não encontrado');
+                return;
+            }
+            
+            // LIMPAR O CONTAINER
+            container.innerHTML = '';
+            
+            // TEXTO DO QR CODE
+            const timestamp = Date.now().toString().slice(-6);
+            const qrText = `PIX:${instituicaoId}:${timestamp}`;
+            
+            console.log('Texto do QR Code:', qrText);
+            
+            // Gerar QR Code
+            if (typeof QRCode === 'undefined') {
+                container.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="width: 180px; height: 180px; background: #008080; color: white; 
+                         margin: 0 auto; display: flex; align-items: center; justify-content: center; 
+                         border-radius: 10px; font-weight: bold; flex-direction: column;">
+                        <i class="fas fa-qrcode" style="font-size: 60px; margin-bottom: 10px;"></i>
+                        <div style="font-size: 14px;">${instituicaoNome.substring(0, 15)}</div>
+                    </div>
+                    <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                        Código: ${qrText}<br>
+                        <small>Use no seu app bancário</small>
+                    </p>
+                </div>
+            `;
+            } else {
+                try {
+                    new QRCode(container, {
+                        text: qrText,
+                        width: 180,
+                        height: 180,
+                        colorDark: "#008080",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.L
+                    });
+                } catch (qrError) {
+                    console.error('Erro no QR Code:', qrError);
+                    container.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="width: 180px; height: 180px; background: #f0f0f0; 
+                             margin: 0 auto; display: flex; align-items: center; justify-content: center; 
+                             border-radius: 10px; border: 2px dashed #ccc; flex-direction: column;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ffc107; margin-bottom: 10px;"></i>
+                            <div style="color: #666; font-size: 14px;">QR Code indisponível</div>
+                        </div>
+                    </div>
+                `;
+                }
+            }
+            
+            // Mostrar seção do QR Code
+            const qrSection = document.getElementById('qrContainer');
+            if (qrSection) {
+                qrSection.classList.remove('qr-hidden');
+                qrSection.classList.add('qr-visible');
+                
+                setTimeout(() => {
+                    qrSection.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 150);
+            }
+            
+            // Registrar doação PIX APENAS SE CONFIRMADO
+            const confirmar = await mostrarConfirmacaoDoacao(
+                instituicaoNome, 
+                'Doação PIX', 
+                'Pagamento via QR Code PIX'
+            );
+            
+            if (confirmar && usuario) {
+                const resultado = await registrarDoacaoBackend({
+                    instituicao_id: instituicaoId,
+                    tipo_doacao: 'dinheiro',
+                    descricao: `Doação PIX para ${instituicaoNome}`,
+                    valor: 0,
+                    status: 'pendente',
+                    usuario_id: usuario.id || 0
+                });
+                
+                if (resultado.status === 'success') {
+                    alert('✅ Doação PIX registrada! QR Code gerado com sucesso.');
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro no QR Code:', error);
+            alert('Erro ao gerar QR Code. Tente novamente.');
+        } finally {
+            // Reabilitar o botão
+            setTimeout(() => {
+                processandoDoacao = false;
+                const doarBtn = document.getElementById('botaoDoacao');
+                if (doarBtn) {
+                    doarBtn.disabled = false;
+                    doarBtn.innerHTML = '💰 Doar Dinheiro';
+                }
+            }, 2000);
+        }
+    }
+
+    // Função auxiliar para QR Code simples
+    function gerarQRCodeSimples(texto, instituicaoNome) {
+        const container = document.querySelector('.qr-image-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (typeof QRCode !== 'undefined') {
+            try {
+                new QRCode(container, {
+                    text: texto,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#008080",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+            } catch (e) {
+                // Fallback final
+                container.innerHTML = `
+                <div style="text-align: center; padding: 15px;">
+                    <div style="width: 160px; height: 160px; background: #008080; 
+                         margin: 0 auto; border-radius: 8px; display: flex; 
+                         align-items: center; justify-content: center; color: white;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold;">PIX</div>
+                            <div style="font-size: 12px; margin-top: 5px;">${instituicaoNome.substring(0, 12)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            }
+        }
+    }
+
+    function limparFormularioDoacao() {
+        try {
+            const form = document.getElementById('formDoacao');
+            if (form) form.reset();
+
+            const doarBtn = document.getElementById('botaoDoacao');
+            if (doarBtn) {
+                doarBtn.innerHTML = '<i class="fas fa-heart"></i> Selecione o tipo de doação';
+                doarBtn.style.background = '#6c757d';
+                doarBtn.disabled = true;
+            }
+
+            const finalizarBtn = document.getElementById('finalizarDoacaoBtn');
+            if (finalizarBtn) finalizarBtn.style.display = 'none';
+
+            const qrSection = document.getElementById('qrContainer');
+            if (qrSection) {
+                qrSection.classList.add('qr-hidden');
+                qrSection.classList.remove('qr-visible');
+            }
+
+            // Limpar container QR Code
+            const container = document.querySelector('.qr-image-container');
+            if (container) container.innerHTML = '';
+
+        } catch (error) {
+            console.error('Erro ao limpar formulário:', error);
+        }
+    }
+
+    // ===== CONFIGURAR MODAL DE DOAÇÃO =====
+    function initDonationModal() {
+        try {
+            const modal = document.getElementById('donationModal');
+            const openBtn = document.getElementById('openDonationModal');
+            const closeBtn = document.querySelector('.close-modal');
+
+            if (!modal || !openBtn) return;
+
+            openBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                preencherFormularioDoacao();
+            });
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function () {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                });
+            }
+
+            window.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            });
+
+        } catch (error) {
+            console.error('Erro no modal de doação:', error);
+        }
+    }
+
+    // ===== CONFIGURAR MODAL DE DETALHES =====
+    function initDetailModal() {
+        try {
+            const closeBtn = document.querySelector('.close-detail-modal');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', fecharDetalhes);
+            }
+
+            const modal = document.getElementById('institutionDetailModal');
+            if (modal) {
+                modal.addEventListener('click', function (e) {
+                    if (e.target === this) fecharDetalhes();
+                });
+            }
+        } catch (error) {
+            console.error('Erro no modal de detalhes:', error);
+        }
+    }
+
+    // ===== CONFIGURAR CLIQUE NAS INSTITUIÇÕES =====
+    function configurarCliqueInstituicoes() {
+        try {
+            const cards = document.querySelectorAll('.help-card');
+
+            cards.forEach(card => {
+                card.style.cursor = 'pointer';
+
+                card.addEventListener('click', function (e) {
+                    e.preventDefault();
+
+                    // Obter ID da instituição
+                    const instId = this.dataset.instituicaoId;
+                    if (!instId) return;
+
+                    // Buscar dados
+                    const instituicoes = JSON.parse(localStorage.getItem('instituicoes')) || [];
+                    const instituicao = instituicoes.find(inst => inst.id == instId);
+
+                    if (instituicao) {
+                        abrirDetalhesInstituicao(instId, instituicao);
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('Erro ao configurar clique nas instituições:', error);
+        }
+    }
+
+    // ===== BOTÃO FECHAR QR CODE =====
+    function initQRCloseButton() {
+        try {
+            const closeQRBtn = document.getElementById('closeQR');
+            if (closeQRBtn) {
+                closeQRBtn.addEventListener('click', function () {
+                    const qrSection = document.getElementById('qrContainer');
+                    if (qrSection) {
+                        qrSection.classList.add('qr-hidden');
+                        qrSection.classList.remove('qr-visible');
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Erro no botão fechar QR:', error);
+        }
+    }
+
+    // ===== INICIALIZAR TUDO =====
+    async function init() {
+        try {
+            log('Inicializando sistema...');
+
+            // Testar conexão
+            await testarConexaoBackend();
+
+            // Inicializar componentes
+            initCarousel();
+            initMobileMenu();
+            initSmoothScroll();
+            initHelpCarousel();
+            initLoginModal();
+            initCreateAccountModal();
+            initDonationModal();
+            initDetailModal();
+            initQRCloseButton();
+
+            // Carregar dados
+            await carregarInstituicoes();
+            checkUserLoginStatus();
+
+            // Configurar cliques
+            setTimeout(() => {
+                configurarCliqueInstituicoes();
+                configurarSistemaDoacao();
+            }, 500);
+
+            log('Sistema inicializado com sucesso!');
+
+        } catch (error) {
+            console.error('Erro na inicialização:', error);
+            alert('Algumas funcionalidades podem não estar disponíveis. Recarregue a página.');
+        }
+    }
+
+    // Iniciar o sistema
+    init();
+});
